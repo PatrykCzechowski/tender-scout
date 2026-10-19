@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Raw data (tender documents may contain personal data)
+data/raw/
