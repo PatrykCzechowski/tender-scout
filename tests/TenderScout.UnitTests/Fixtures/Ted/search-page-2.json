@@ -1,0 +1,70 @@
+{
+  "notices": [
+    {
+      "deadline-receipt-tender-date-lot": [
+        "2026-10-23+01:00"
+      ],
+      "publication-number": "722800-2026",
+      "classification-cpv": [
+        "48820000",
+        "48820000"
+      ],
+      "buyer-name": {
+        "pol": [
+          "POLITECHNIKA RZESZOWSKA"
+        ]
+      },
+      "main-classification-proc": [
+        "48820000"
+      ],
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/722800-2026/xml"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/722800-2026",
+          "POL": "https://ted.europa.eu/pl/notice/-/detail/722800-2026"
+        }
+      },
+      "notice-title": {
+        "pol": "Polska – Serwery – Dostawa serwerów do klastra wirtualizacyjnego",
+        "eng": "Poland – Servers – Dostawa serwerów do klastra wirtualizacyjnego"
+      }
+    },
+    {
+      "publication-number": "723696-2026",
+      "classification-cpv": [
+        "48516000",
+        "31710000",
+        "48516000",
+        "31710000"
+      ],
+      "buyer-name": {
+        "pol": [
+          "Centrum Zasobów Cyberprzestrzeni Sił Zbrojnych"
+        ]
+      },
+      "main-classification-proc": [
+        "48516000"
+      ],
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/723696-2026/xml"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/723696-2026",
+          "POL": "https://ted.europa.eu/pl/notice/-/detail/723696-2026"
+        }
+      },
+      "notice-title": {
+        "pol": "Polska – Pakiety oprogramowania do wymiany danych – Dostawa urządzeń bezpieczeństwa 2026",
+        "eng": "Poland – Exchange software package – Dostawa urządzeń bezpieczeństwa 2026"
+      }
+    }
+  ],
+  "totalNoticeCount": 5,
+  "iterationNextToken": "AAABobdsP7gAJFVkUT9mxm8f6srbFLfqnXnVCB15fm+XbffezIaI7q8wUoe3acbGxdSFSY7hn1oDWqaLDqZhafUniXNjWU0WTqbWgd8zmN3vGxgkHhPMGQ==",
+  "timedOut": false
+}
