@@ -5,4 +5,7 @@
     <Project Path="src/TenderScout.ServiceDefaults/TenderScout.ServiceDefaults.csproj" />
     <Project Path="src/TenderScout.Worker/TenderScout.Worker.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TenderScout.UnitTests/TenderScout.UnitTests.csproj" />
+  </Folder>
 </Solution>
