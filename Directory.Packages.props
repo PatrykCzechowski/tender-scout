@@ -23,6 +23,10 @@
   <ItemGroup Label="Infrastructure">
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.13" />
   </ItemGroup>
+  <ItemGroup Label="Messaging">
+    <!-- Stay on MassTransit v8 (Apache-2.0); v9 is commercially licensed. See ADR-0002. -->
+    <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.12" />
+  </ItemGroup>
   <ItemGroup Label="Persistence">
     <!-- Pinned above the minimum Npgsql requires so every project resolves the same EF Core patch. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
@@ -33,6 +37,7 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.16.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
 </Project>
