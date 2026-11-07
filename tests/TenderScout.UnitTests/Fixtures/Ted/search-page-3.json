@@ -1,0 +1,42 @@
+{
+  "notices": [
+    {
+      "deadline-receipt-tender-date-lot": [
+        "2026-10-23+02:00"
+      ],
+      "publication-number": "722966-2026",
+      "classification-cpv": [
+        "72250000",
+        "72230000",
+        "72611000",
+        "72250000",
+        "72230000"
+      ],
+      "buyer-name": {
+        "pol": [
+          "Gdańskie Centrum Informatyczne"
+        ]
+      },
+      "main-classification-proc": [
+        "72250000"
+      ],
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/722966-2026/xml"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/722966-2026",
+          "POL": "https://ted.europa.eu/pl/notice/-/detail/722966-2026"
+        }
+      },
+      "notice-title": {
+        "pol": "Polska – Usługi w zakresie konserwacji i wsparcia systemów – USŁUGA UTRZYMANIA I ROZWOJU GDAŃSKIEJ PLATFORMY EDUKACYJNEJ",
+        "eng": "Poland – System and support services – USŁUGA UTRZYMANIA I ROZWOJU GDAŃSKIEJ PLATFORMY EDUKACYJNEJ"
+      }
+    }
+  ],
+  "totalNoticeCount": 5,
+  "iterationNextToken": "AAABobdsQLkAJFVmXzc3EWgSn6s9NaWZkBs9AanVS9ssgwasnTauMOKl5rghtzVVJrrCN03iRyXkE5PkuDr+gvLM05UCrIVRMyHOIH2YRrlILRR+sUyH1A==",
+  "timedOut": false
+}

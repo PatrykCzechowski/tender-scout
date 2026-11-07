@@ -1,0 +1,93 @@
+{
+  "notices": [
+    {
+      "deadline-receipt-tender-date-lot": [
+        "2026-11-19+01:00"
+      ],
+      "publication-number": "722731-2026",
+      "classification-cpv": [
+        "48000000",
+        "72250000",
+        "72263000",
+        "72268000",
+        "48000000",
+        "72250000",
+        "72263000",
+        "72268000"
+      ],
+      "buyer-name": {
+        "pol": [
+          "Narodowy Bank Polski"
+        ]
+      },
+      "main-classification-proc": [
+        "48000000"
+      ],
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/722731-2026/xml"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/722731-2026",
+          "POL": "https://ted.europa.eu/pl/notice/-/detail/722731-2026"
+        }
+      },
+      "notice-title": {
+        "pol": "Polska – Pakiety oprogramowania i systemy informatyczne – System wykrywania anomalii w ruchu SMTP w oparciu o Self-Learning AI",
+        "eng": "Poland – Software package and information systems – System wykrywania anomalii w ruchu SMTP w oparciu o Self-Learning AI"
+      }
+    },
+    {
+      "deadline-receipt-tender-date-lot": [
+        "2026-11-03+01:00"
+      ],
+      "publication-number": "722762-2026",
+      "classification-cpv": [
+        "72000000",
+        "72100000",
+        "72200000",
+        "72300000",
+        "72700000",
+        "72800000",
+        "72611000",
+        "72210000",
+        "72212000",
+        "72000000",
+        "72100000",
+        "72200000",
+        "72300000",
+        "72700000",
+        "72800000",
+        "72611000",
+        "72210000",
+        "72212000"
+      ],
+      "buyer-name": {
+        "pol": [
+          "Centralna Komisja Egzaminacyjna"
+        ]
+      },
+      "main-classification-proc": [
+        "72000000"
+      ],
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/722762-2026/xml"
+        },
+        "html": {
+          "ENG": "https://ted.europa.eu/en/notice/-/detail/722762-2026",
+          "POL": "https://ted.europa.eu/pl/notice/-/detail/722762-2026"
+        }
+      },
+      "notice-title": {
+        "pol": "Polska – Usługi informatyczne: konsultacyjne, opracowywania oprogramowania, internetowe i wsparcia – Utrzymanie w ruchu i rozwój systemu informatycznego SIOEZ w tym prace programistyczne oraz usługi im towarzyszące",
+        "eng": "Poland – IT services: consulting, software development, Internet and support – Utrzymanie w ruchu i rozwój systemu informatycznego SIOEZ w tym prace programistyczne oraz usługi im towarzyszące"
+      }
+    }
+  ],
+  "totalNoticeCount": 5,
+  "iterationNextToken": "AAABobdsPokAJFVihytS0osrnicT6x104pys2jZ9nbMhZf8Coe0VEd0KCsfp2DjH/gtwgYtiYz28tCcB+h2ZZj7klGfYQAWzervfSl2h2Cn9AGnAD7z12Q==",
+  "timedOut": false
+}

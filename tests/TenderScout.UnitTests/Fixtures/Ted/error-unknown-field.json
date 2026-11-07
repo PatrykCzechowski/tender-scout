@@ -1,0 +1,13 @@
+{
+  "message": "Unknown search field 'bogus' found in expert query",
+  "error": {
+    "type": "QUERY_UNKNOWN_FIELD",
+    "location": {
+      "beginColumn": 0,
+      "beginLine": 1,
+      "endColumn": 5,
+      "endLine": 1
+    },
+    "fieldName": "bogus"
+  }
+}

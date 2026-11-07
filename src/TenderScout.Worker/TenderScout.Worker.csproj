@@ -7,6 +7,7 @@
     <PackageReference Include="Aspire.RabbitMQ.Client" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
     <ProjectReference Include="..\TenderScout.ServiceDefaults\TenderScout.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,28 @@
+{
+  "notices": [
+    {
+      "publication-number": "723810-2026",
+      "publication-date": "2026-10-20+02:00"
+    },
+    {
+      "deadline-receipt-tender-date-lot": [
+        "2026-10-23+02:00"
+      ],
+      "publication-number": "722966-2026",
+      "classification-cpv": [],
+      "buyer-name": {},
+      "publication-date": "2026-10-20+02:00",
+      "links": {
+        "xml": {
+          "MUL": "https://ted.europa.eu/en/notice/722966-2026/xml"
+        }
+      },
+      "notice-title": {
+        "deu": "Poland – System and support services – USŁUGA UTRZYMANIA I ROZWOJU GDAŃSKIEJ PLATFORMY EDUKACYJNEJ"
+      }
+    }
+  ],
+  "totalNoticeCount": 2,
+  "iterationNextToken": "AAABobdsPokAJFVihytS0osrnicT6x104pys2jZ9nbMhZf8Coe0VEd0KCsfp2DjH/gtwgYtiYz28tCcB+h2ZZj7klGfYQAWzervfSl2h2Cn9AGnAD7z12Q==",
+  "timedOut": false
+}
