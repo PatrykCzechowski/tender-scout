@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>tender-scout-apphost</UserSecretsId>
+    <!-- Runs via `dotnet run`; the Aspire CLI bundle is not required. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenderScout.Api\TenderScout.Api.csproj" />
+    <ProjectReference Include="..\TenderScout.Worker\TenderScout.Worker.csproj" />
+  </ItemGroup>
+</Project>
