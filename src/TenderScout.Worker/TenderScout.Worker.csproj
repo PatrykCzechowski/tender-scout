@@ -3,7 +3,7 @@
     <UserSecretsId>tender-scout-worker</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Aspire.Npgsql" />
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Aspire.RabbitMQ.Client" />
   </ItemGroup>
   <ItemGroup>
