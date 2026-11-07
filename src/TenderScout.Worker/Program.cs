@@ -1,12 +1,14 @@
+using TenderScout.Infrastructure.Persistence;
 using TenderScout.Infrastructure.Ted;
 using TenderScout.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddServiceDefaults();
-builder.AddNpgsqlDataSource("tenderscout");
+builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout");
 builder.AddRabbitMQClient("messaging");
 
+builder.Services.AddNoticePersistence();
 builder.Services.AddTedClient();
 builder.Services.AddHostedService<Worker>();
 

@@ -12,17 +12,24 @@ var rabbitmq = builder.AddRabbitMQ("messaging")
     .WithDataVolume()
     .WithLifetime(ContainerLifetime.Persistent);
 
+// Applies EF Core migrations and exits; the services below start only after it succeeds.
+var migrations = builder.AddProject<Projects.TenderScout_MigrationService>("migrations")
+    .WithReference(database)
+    .WaitFor(database);
+
 builder.AddProject<Projects.TenderScout_Api>("api")
     .WithReference(database)
     .WithReference(rabbitmq)
     .WaitFor(database)
     .WaitFor(rabbitmq)
+    .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.TenderScout_Worker>("worker")
     .WithReference(database)
     .WithReference(rabbitmq)
     .WaitFor(database)
-    .WaitFor(rabbitmq);
+    .WaitFor(rabbitmq)
+    .WaitForCompletion(migrations);
 
 builder.Build().Run();
