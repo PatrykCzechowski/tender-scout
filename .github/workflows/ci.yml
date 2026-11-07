@@ -20,8 +20,10 @@ env:
 jobs:
   build:
     name: Build, test & format
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Own pushes and same-repo PRs run on the self-hosted Raspberry Pi runner.
+    # Fork PRs run on GitHub-hosted runners so untrusted code never reaches the Pi.
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "raspberry-pi"]') || 'ubuntu-latest' }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -29,6 +31,9 @@ jobs:
 
       - name: Setup .NET (from global.json)
         uses: actions/setup-dotnet@v6
+        env:
+          # Install into the runner's tool cache: no sudo needed on the Pi, and the SDK is reused between runs.
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
           global-json-file: global.json
 
