@@ -15,6 +15,9 @@
     <ProjectReference Include="..\..\src\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>
