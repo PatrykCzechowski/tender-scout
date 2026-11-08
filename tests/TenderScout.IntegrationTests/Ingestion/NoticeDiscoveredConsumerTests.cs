@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using TenderScout.Contracts.Notices;
 using TenderScout.Domain.Notices;
 using TenderScout.Infrastructure.Ingestion;
@@ -120,24 +121,33 @@ public sealed class NoticeDiscoveredConsumerTests(PostgresFixture database, Rabb
     }
 
     /// <summary>
-    /// Drains the error queue looking for the message. MassTransit moves a message there right around
-    /// the time it publishes the fault, so this polls briefly.
+    /// Drains the error queue looking for the message. MassTransit declares the queue and moves the
+    /// message there right around the time it publishes the fault, so this polls briefly and treats a
+    /// queue that does not exist yet as empty.
     /// </summary>
     private async Task<bool> ErrorQueueContainsAsync(string publicationNumber)
     {
         var factory = new ConnectionFactory { Uri = rabbitMq.Uri };
         await using var connection = await factory.CreateConnectionAsync(Ct);
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: Ct);
 
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (DateTime.UtcNow < deadline)
         {
-            while (await channel.BasicGetAsync(ErrorQueue, autoAck: true, Ct) is { } delivery)
+            // A 404 on a missing queue closes the channel, so each attempt gets a fresh one.
+            await using var channel = await connection.CreateChannelAsync(cancellationToken: Ct);
+            try
             {
-                if (Encoding.UTF8.GetString(delivery.Body.Span).Contains(publicationNumber, StringComparison.Ordinal))
+                while (await channel.BasicGetAsync(ErrorQueue, autoAck: true, Ct) is { } delivery)
                 {
-                    return true;
+                    if (Encoding.UTF8.GetString(delivery.Body.Span).Contains(publicationNumber, StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
                 }
+            }
+            catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == Constants.NotFound)
+            {
+                // Not declared yet; try again.
             }
 
             await Task.Delay(100, Ct);
