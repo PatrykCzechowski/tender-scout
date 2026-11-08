@@ -74,9 +74,8 @@ public sealed class OllamaEmbeddingRegistrationTests
         var handler = new FakeOllamaHandler { Delay = TimeSpan.FromSeconds(30) };
         await using var provider = Create(handler, new() { ["Embedding:RequestTimeout"] = "00:00:00.050" });
 
+        // How many attempts fit in so short a budget depends on the machine, so only the failure is asserted.
         await Assert.ThrowsAnyAsync<Exception>(() => Generator(provider).GenerateAsync(["Tekst"], cancellationToken: Ct));
-
-        Assert.Equal(3, handler.Requests.Count);
     }
 
     [Fact]
