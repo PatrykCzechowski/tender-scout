@@ -18,10 +18,4 @@ public sealed class EmbeddingOptions
 
     /// <summary>Time limit of one attempt at a batch. Generous, because the first request after a pause loads the model.</summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(2);
-
-    /// <summary>Retries of a batch after a connection error, a timeout or a transient HTTP status.</summary>
-    public int MaxRetryAttempts { get; set; } = 2;
-
-    /// <summary>Delay before the first retry; later ones grow exponentially.</summary>
-    public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
 }

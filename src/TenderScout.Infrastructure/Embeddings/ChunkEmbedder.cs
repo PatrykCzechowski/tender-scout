@@ -2,6 +2,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TenderScout.Domain.Documents;
+using TenderScout.Infrastructure.Persistence;
 
 namespace TenderScout.Infrastructure.Embeddings;
 
@@ -14,7 +15,7 @@ public sealed record ChunkEmbeddingReport(int Embedded, int Batches);
 /// </summary>
 public sealed partial class ChunkEmbedder(
     IEmbeddingGenerator<string, Embedding<float>> generator,
-    IChunkEmbeddingRepository repository,
+    ChunkEmbeddingRepository repository,
     IOptions<EmbeddingOptions> options,
     ILogger<ChunkEmbedder> logger)
 {
@@ -24,12 +25,11 @@ public sealed partial class ChunkEmbedder(
         var settings = options.Value;
         var embedded = 0;
         var batches = 0;
-        var afterChunkId = 0L;
 
         while (true)
         {
             var batch = await repository
-                .GetPendingAsync(settings.Model, afterChunkId, settings.BatchSize, cancellationToken)
+                .GetPendingAsync(settings.Model, settings.BatchSize, cancellationToken)
                 .ConfigureAwait(false);
 
             if (batch.Count == 0)
@@ -40,8 +40,6 @@ public sealed partial class ChunkEmbedder(
             var vectors = await GenerateAsync(batch, batches + 1, embedded, cancellationToken).ConfigureAwait(false);
             await repository.SaveAsync(settings.Model, vectors, cancellationToken).ConfigureAwait(false);
 
-            // Moving past the batch guarantees progress even if every chunk in it was deleted meanwhile.
-            afterChunkId = batch[^1].ChunkId;
             embedded += batch.Count;
             batches++;
             LogBatchStored(logger, batches, embedded);
