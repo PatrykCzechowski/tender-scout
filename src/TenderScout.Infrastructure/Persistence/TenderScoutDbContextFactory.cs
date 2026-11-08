@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Pgvector.EntityFrameworkCore;
 
 namespace TenderScout.Infrastructure.Persistence;
 
@@ -11,6 +12,6 @@ internal sealed class TenderScoutDbContextFactory : IDesignTimeDbContextFactory<
 {
     public TenderScoutDbContext CreateDbContext(string[] args) =>
         new(new DbContextOptionsBuilder<TenderScoutDbContext>()
-            .UseNpgsql("Host=localhost;Database=tenderscout")
+            .UseNpgsql("Host=localhost;Database=tenderscout", npgsql => npgsql.UseVector())
             .Options);
 }

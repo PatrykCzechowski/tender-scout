@@ -39,4 +39,11 @@ builder.AddProject<Projects.TenderScout_DocumentImport>("document-import")
     .WaitForCompletion(migrations)
     .WithExplicitStart();
 
+// Developer command, kept apart from the import so documents can be imported while the Ollama machine is off.
+builder.AddProject<Projects.TenderScout_DocumentEmbedding>("document-embedding")
+    .WithReference(database)
+    .WaitFor(database)
+    .WaitForCompletion(migrations)
+    .WithExplicitStart();
+
 builder.Build().Run();

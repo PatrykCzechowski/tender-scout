@@ -1,4 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql;
+using Pgvector.EntityFrameworkCore;
 using TenderScout.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 
@@ -24,10 +28,40 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public string ConnectionString => _container.GetConnectionString();
 
-    public TenderScoutDbContext CreateDbContext() =>
+    public TenderScoutDbContext CreateDbContext() => CreateDbContext(ConnectionString);
+
+    public TenderScoutDbContext CreateDbContext(string connectionString, bool retryOnFailure = false) =>
         new(new DbContextOptionsBuilder<TenderScoutDbContext>()
-            .UseNpgsql(ConnectionString)
+            .UseNpgsql(connectionString, npgsql =>
+            {
+                npgsql.UseVector();
+                if (retryOnFailure)
+                {
+                    npgsql.EnableRetryOnFailure();
+                }
+            })
             .Options);
+
+    /// <summary>
+    /// Creates a database only the calling test sees, migrated up to <paramref name="targetMigration"/> or fully.
+    /// </summary>
+    /// <returns>Its connection string.</returns>
+    public async Task<string> CreateIsolatedDatabaseAsync(string? targetMigration = null)
+    {
+        var name = $"test_{Guid.NewGuid():N}";
+
+        await using (var admin = new NpgsqlConnection(ConnectionString))
+        {
+            await admin.OpenAsync();
+            await using var command = new NpgsqlCommand($"CREATE DATABASE {name}", admin);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var connectionString = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ConnectionString;
+        await using var dbContext = CreateDbContext(connectionString);
+        await dbContext.GetService<IMigrator>().MigrateAsync(targetMigration);
+        return connectionString;
+    }
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();
 }

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Npgsql;
+using Pgvector.EntityFrameworkCore;
 using TenderScout.Domain.Documents;
 using TenderScout.Infrastructure.Documents;
 using TenderScout.Infrastructure.Persistence;
@@ -337,6 +338,7 @@ public sealed class DocumentImportTests(PostgresFixture database) : IDisposable
     {
         var builder = new DbContextOptionsBuilder<TenderScoutDbContext>().UseNpgsql(database.ConnectionString, npgsql =>
         {
+            npgsql.UseVector();
             if (retryOnFailure)
             {
                 npgsql.EnableRetryOnFailure();

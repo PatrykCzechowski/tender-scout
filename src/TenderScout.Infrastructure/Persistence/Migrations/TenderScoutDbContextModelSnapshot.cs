@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Pgvector;
 using TenderScout.Infrastructure.Persistence;
 
 #nullable disable
@@ -21,6 +22,7 @@ namespace TenderScout.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("TenderScout.Infrastructure.Persistence.DocumentChunkEntity", b =>
@@ -35,6 +37,15 @@ namespace TenderScout.Infrastructure.Persistence.Migrations
                     b.Property<long>("DocumentId")
                         .HasColumnType("bigint")
                         .HasColumnName("document_id");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(1024)")
+                        .HasColumnName("embedding");
+
+                    b.Property<string>("EmbeddingModel")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("embedding_model");
 
                     b.Property<int>("PageNumber")
                         .HasColumnType("integer")
@@ -51,6 +62,12 @@ namespace TenderScout.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_document_chunks");
+
+                    b.HasIndex("Embedding")
+                        .HasDatabaseName("ix_document_chunks_embedding_hnsw");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
                     b.HasIndex("DocumentId", "Position")
                         .IsUnique()

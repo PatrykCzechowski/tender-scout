@@ -102,7 +102,7 @@ public sealed class NoticeDiscoveredConsumerTests(PostgresFixture database, Rabb
 
         var services = new ServiceCollection()
             .AddSingleton<IConfiguration>(configuration)
-            .AddDbContext<TenderScoutDbContext>(options => options.UseNpgsql(database.ConnectionString))
+            .AddDbContext<TenderScoutDbContext>(options => options.UseNpgsql(database.ConnectionString).UsePgvector())
             .AddNoticePersistence()
             .AddNoticeIngestion()
             .AddMassTransitTestHarness(bus => bus

@@ -9,7 +9,7 @@ using TenderScout.Worker;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddServiceDefaults();
-builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout");
+builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
 builder.Services.AddNoticePersistence();
 builder.Services.AddTedClient();

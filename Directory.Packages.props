@@ -30,6 +30,11 @@
   <ItemGroup Label="Documents">
     <PackageVersion Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
+  <ItemGroup Label="Embeddings">
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.8.0" />
+    <PackageVersion Include="OllamaSharp" Version="5.5.2" />
+    <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+  </ItemGroup>
   <ItemGroup Label="Persistence">
     <!-- Pinned above the minimum Npgsql requires so every project resolves the same EF Core patch. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />

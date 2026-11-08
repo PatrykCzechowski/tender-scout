@@ -1,3 +1,5 @@
+using Pgvector;
+
 namespace TenderScout.Infrastructure.Persistence;
 
 /// <summary>
@@ -14,4 +16,10 @@ public sealed class DocumentChunkEntity
     public int PageNumber { get; init; }
 
     public required string Text { get; init; }
+
+    /// <summary>The chunk's vector; <see langword="null"/> until it has been embedded.</summary>
+    public Vector? Embedding { get; set; }
+
+    /// <summary>The model that produced <see cref="Embedding"/>.</summary>
+    public string? EmbeddingModel { get; set; }
 }
