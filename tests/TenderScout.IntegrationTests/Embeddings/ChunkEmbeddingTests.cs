@@ -119,6 +119,64 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task Run_SplitsChunksIntoConfiguredBatchesInIdOrder()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 7));
+
+        var report = await EmbedAsync(connection, batchSize: 3);
+
+        Assert.Equal(new ChunkEmbeddingReport(7, 3), report);
+        Assert.Equal([3, 3, 1], _generator.Calls.Select(call => call.Count));
+        await using var dbContext = database.CreateDbContext(connection);
+        var texts = await dbContext.DocumentChunks.AsNoTracking().OrderBy(c => c.Id).Select(c => c.Text).ToListAsync(Ct);
+        Assert.Equal(texts, _generator.Calls.SelectMany(call => call));
+    }
+
+    [Fact]
+    public async Task Run_TooFewVectors_StoresNothingFromThatBatch()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 3));
+        _generator.Transform = vectors => [.. vectors.Take(2)];
+
+        var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection));
+
+        Assert.Contains("expected 3 vectors, got 2", exception.Message, StringComparison.Ordinal);
+        await AssertNothingStoredAsync(connection);
+    }
+
+    [Theory]
+    [InlineData(512)]
+    [InlineData(1536)]
+    public async Task Run_WrongDimension_NamesBothLengthsAndStoresNothing(int dimensions)
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 2));
+        _generator.Transform = vectors => [.. vectors.Select(_ => new float[dimensions])];
+
+        var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection));
+
+        Assert.Contains($"expected 1024 dimensions, got {dimensions}", exception.Message, StringComparison.Ordinal);
+        await AssertNothingStoredAsync(connection);
+    }
+
+    [Fact]
+    public async Task Run_CancelledWhileGenerating_IsNotReportedAsAGeneratorFailure()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 1));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        _generator.Transform = _ =>
+        {
+            cancellation.Cancel();
+            throw new OperationCanceledException(cancellation.Token);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => EmbedAsync(connection, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
     public async Task Run_SecondTime_SendsNothingAndChangesNothing()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
@@ -141,8 +199,12 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         await SeedAsync(connection, ("doc-1", 5));
         _generator.FailOnCall = 3;
 
-        await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, batchSize: 2));
+        var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, batchSize: 2));
 
+        Assert.Contains("Batch 3", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Connection refused", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<HttpRequestException>(exception.InnerException);
+        Assert.Equal(3, _generator.Calls.Count);
         await using (var dbContext = database.CreateDbContext(connection))
         {
             Assert.Equal(4, await dbContext.DocumentChunks.CountAsync(c => c.Embedding != null, Ct));
@@ -253,12 +315,22 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         return vector;
     }
 
-    private async Task<ChunkEmbeddingReport> EmbedAsync(string connection, int batchSize = 32, bool retryOnFailure = false)
+    private async Task<ChunkEmbeddingReport> EmbedAsync(
+        string connection,
+        int batchSize = 32,
+        bool retryOnFailure = false,
+        CancellationToken? cancellationToken = null)
     {
         await using var dbContext = database.CreateDbContext(connection, retryOnFailure);
         var options = Options.Create(new EmbeddingOptions { Endpoint = "http://ollama.test:11434", Model = Model, BatchSize = batchSize });
         var embedder = new ChunkEmbedder(_generator, new ChunkEmbeddingRepository(dbContext), options, NullLogger<ChunkEmbedder>.Instance);
-        return await embedder.RunAsync(Ct);
+        return await embedder.RunAsync(cancellationToken ?? Ct);
+    }
+
+    private async Task AssertNothingStoredAsync(string connection)
+    {
+        await using var dbContext = database.CreateDbContext(connection);
+        Assert.Equal(0, await dbContext.DocumentChunks.CountAsync(c => c.Embedding != null, Ct));
     }
 
     private async Task ImportAsync(string connection, DocumentTestFolder folder)

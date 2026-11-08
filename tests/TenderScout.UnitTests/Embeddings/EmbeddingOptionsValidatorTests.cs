@@ -70,17 +70,6 @@ public sealed class EmbeddingOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_NoRetries_NamesTheKey()
-    {
-        var options = CreateOptions();
-        options.MaxRetryAttempts = 0;
-
-        var result = new EmbeddingOptionsValidator().Validate(null, options);
-
-        Assert.Contains("Embedding:MaxRetryAttempts", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Validate_SeveralProblems_NamesEachKey()
     {
         var result = new EmbeddingOptionsValidator().Validate(null, new EmbeddingOptions { BatchSize = 0 });

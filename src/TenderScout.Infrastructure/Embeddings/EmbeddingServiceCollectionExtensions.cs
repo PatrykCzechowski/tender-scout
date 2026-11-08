@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
-using TenderScout.Domain.Documents;
 using TenderScout.Infrastructure.Persistence;
 
 namespace TenderScout.Infrastructure.Embeddings;
@@ -11,6 +10,12 @@ namespace TenderScout.Infrastructure.Embeddings;
 public static class EmbeddingServiceCollectionExtensions
 {
     internal const string HttpClientName = "ollama";
+
+    /// <summary>Retries of a batch after a connection error, a timeout or a transient HTTP status.</summary>
+    private const int MaxRetryAttempts = 2;
+
+    /// <summary>Delay before the first retry; later ones grow exponentially.</summary>
+    private static readonly TimeSpan RetryBaseDelay = TimeSpan.FromSeconds(1);
 
     /// <summary>A switched-off machine should fail in seconds, while a loaded model may take minutes to answer.</summary>
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
@@ -28,7 +33,7 @@ public static class EmbeddingServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<EmbeddingOptions>, EmbeddingOptionsValidator>();
 
-        services.AddScoped<IChunkEmbeddingRepository, ChunkEmbeddingRepository>();
+        services.AddScoped<ChunkEmbeddingRepository>();
         services.AddScoped<ChunkEmbedder>();
 
         services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(serviceProvider =>
@@ -63,16 +68,16 @@ public static class EmbeddingServiceCollectionExtensions
 
     private static void ConfigureResilience(HttpStandardResilienceOptions resilience, EmbeddingOptions options)
     {
-        resilience.Retry.MaxRetryAttempts = options.MaxRetryAttempts;
-        resilience.Retry.Delay = options.RetryBaseDelay;
+        resilience.Retry.MaxRetryAttempts = MaxRetryAttempts;
+        resilience.Retry.Delay = RetryBaseDelay;
         resilience.Retry.BackoffType = Polly.DelayBackoffType.Exponential;
         resilience.Retry.UseJitter = true;
 
         resilience.AttemptTimeout.Timeout = options.RequestTimeout;
 
         // Every attempt may time out, plus the exponential backoff between them (doubled for jitter headroom).
-        var attempts = options.MaxRetryAttempts + 1;
-        var backoff = options.RetryBaseDelay * Math.Pow(2, attempts);
+        var attempts = MaxRetryAttempts + 1;
+        var backoff = RetryBaseDelay * Math.Pow(2, attempts);
         resilience.TotalRequestTimeout.Timeout = (options.RequestTimeout * attempts) + backoff;
 
         // The circuit breaker must sample at least two attempt timeouts.

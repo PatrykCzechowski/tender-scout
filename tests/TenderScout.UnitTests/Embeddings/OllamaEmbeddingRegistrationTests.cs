@@ -114,7 +114,6 @@ public sealed class OllamaEmbeddingRegistrationTests
             {
                 ["Embedding:Endpoint"] = "http://ollama.test:11434",
                 ["Embedding:Model"] = "test-model",
-                ["Embedding:RetryBaseDelay"] = "00:00:00.001",
             })
             .AddInMemoryCollection(settings ?? [])
             .Build();

@@ -34,16 +34,6 @@ internal sealed class EmbeddingOptionsValidator : IValidateOptions<EmbeddingOpti
             failures.Add($"{Prefix}{nameof(options.RequestTimeout)} must be at least {MinRequestTimeout.TotalMilliseconds} ms.");
         }
 
-        if (options.MaxRetryAttempts < 1)
-        {
-            failures.Add($"{Prefix}{nameof(options.MaxRetryAttempts)} must be at least 1.");
-        }
-
-        if (options.RetryBaseDelay < TimeSpan.Zero)
-        {
-            failures.Add($"{Prefix}{nameof(options.RetryBaseDelay)} must not be negative.");
-        }
-
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

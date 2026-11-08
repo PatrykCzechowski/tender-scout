@@ -5,25 +5,32 @@ using TenderScout.Domain.Documents;
 
 namespace TenderScout.Infrastructure.Persistence;
 
-internal sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext) : IChunkEmbeddingRepository
+/// <summary>
+/// Stores chunk embeddings and finds the chunks nearest to a query vector.
+/// </summary>
+public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
 {
     /// <summary>An HNSW scan returns at most <c>hnsw.ef_search</c> rows, 40 by default.</summary>
     internal const int MaxSearchResults = 40;
 
+    /// <summary>Returns chunks without an embedding from <paramref name="model"/>, in id order.</summary>
     public async Task<IReadOnlyList<ChunkToEmbed>> GetPendingAsync(
         string model,
-        long afterChunkId,
         int limit,
         CancellationToken cancellationToken = default) =>
         await dbContext.DocumentChunks
             .AsNoTracking()
-            .Where(c => c.Id > afterChunkId && (c.Embedding == null || c.EmbeddingModel != model))
+            .Where(c => c.Embedding == null || c.EmbeddingModel != model)
             .OrderBy(c => c.Id)
             .Take(limit)
             .Select(c => new ChunkToEmbed(c.Id, c.Text))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+    /// <summary>
+    /// Stores the vectors and the model name as one unit. A chunk deleted in the meantime is not an error:
+    /// a re-import replaced it and its successor is still waiting for an embedding.
+    /// </summary>
     public Task SaveAsync(
         string model,
         IReadOnlyList<ChunkEmbedding> embeddings,
@@ -37,6 +44,11 @@ internal sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext) :
             cancellationToken);
     }
 
+    /// <summary>
+    /// Returns the chunks nearest to the query vector, best first, among those embedded by <paramref name="model"/>:
+    /// vectors from different models cannot be compared.
+    /// </summary>
+    /// <exception cref="ArgumentException">The limit is out of range or the vector has the wrong length.</exception>
     public async Task<IReadOnlyList<ChunkSearchResult>> SearchAsync(
         ReadOnlyMemory<float> queryVector,
         string model,
