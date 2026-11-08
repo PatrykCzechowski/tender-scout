@@ -32,4 +32,11 @@ builder.AddProject<Projects.TenderScout_Worker>("worker")
     .WaitFor(rabbitmq)
     .WaitForCompletion(migrations);
 
+// Developer command: starts only from the dashboard, so a long import never delays the services above.
+builder.AddProject<Projects.TenderScout_DocumentImport>("document-import")
+    .WithReference(database)
+    .WaitFor(database)
+    .WaitForCompletion(migrations)
+    .WithExplicitStart();
+
 builder.Build().Run();

@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Tender documents are local only; DocumentImport:DocumentsFolder points here
+/data/raw/
