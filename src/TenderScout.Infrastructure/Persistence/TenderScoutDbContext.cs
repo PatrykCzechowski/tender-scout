@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using TenderScout.Domain.Documents;
 
 namespace TenderScout.Infrastructure.Persistence;
 
@@ -13,6 +14,8 @@ public sealed class TenderScoutDbContext(DbContextOptions<TenderScoutDbContext> 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("vector");
+
         ConfigureNotice(modelBuilder.Entity<NoticeEntity>());
         ConfigureDocument(modelBuilder.Entity<DocumentEntity>());
         ConfigureDocumentChunk(modelBuilder.Entity<DocumentChunkEntity>());
@@ -81,5 +84,12 @@ public sealed class TenderScoutDbContext(DbContextOptions<TenderScoutDbContext> 
 
         chunk.Property(c => c.PageNumber).HasColumnName("page_number");
         chunk.Property(c => c.Text).HasColumnName("text");
+
+        chunk.Property(c => c.Embedding).HasColumnName("embedding").HasColumnType($"vector({ChunkEmbedding.Dimensions})");
+        chunk.Property(c => c.EmbeddingModel).HasColumnName("embedding_model").HasMaxLength(128);
+        chunk.HasIndex(c => c.Embedding)
+            .HasMethod("hnsw")
+            .HasOperators("vector_cosine_ops")
+            .HasDatabaseName("ix_document_chunks_embedding_hnsw");
     }
 }
