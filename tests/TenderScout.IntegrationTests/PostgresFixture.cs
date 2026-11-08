@@ -22,9 +22,11 @@ public sealed class PostgresFixture : IAsyncLifetime
         await dbContext.Database.MigrateAsync();
     }
 
+    public string ConnectionString => _container.GetConnectionString();
+
     public TenderScoutDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<TenderScoutDbContext>()
-            .UseNpgsql(_container.GetConnectionString())
+            .UseNpgsql(ConnectionString)
             .Options);
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();

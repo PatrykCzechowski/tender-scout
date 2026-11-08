@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/TenderScout.Api/TenderScout.Api.csproj" />
     <Project Path="src/TenderScout.AppHost/TenderScout.AppHost.csproj" />
+    <Project Path="src/TenderScout.Contracts/TenderScout.Contracts.csproj" />
     <Project Path="src/TenderScout.Domain/TenderScout.Domain.csproj" />
     <Project Path="src/TenderScout.Infrastructure/TenderScout.Infrastructure.csproj" />
     <Project Path="src/TenderScout.MigrationService/TenderScout.MigrationService.csproj" />

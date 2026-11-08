@@ -10,3 +10,4 @@ supersedes it and update the old one's status.
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0001](0001-dotnet-and-aspire.md) | .NET 10 with .NET Aspire for local orchestration | Accepted |
+| [0002](0002-messaging-masstransit-rabbitmq.md) | MassTransit v8 on RabbitMQ for notice ingestion, with idempotent consumers | Accepted |
