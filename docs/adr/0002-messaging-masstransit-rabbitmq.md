@@ -52,8 +52,10 @@ Raspberry Pi (linux-arm64), and a likely move to Azure Container Apps.
   exception, or a message still failing after the last retry, is moved to
   **`notice-discovered_error`** (visible in the RabbitMQ management UI) and a
   `Fault<NoticeDiscovered>` is published.
-- A failed poll (TED down, broker unreachable) is logged and simply retried on the
-  next tick; the overlapping window finds the same notices again.
+- A failed poll (for example TED being down) is logged and simply retried on the
+  next tick; the overlapping window finds the same notices again. An unreachable
+  broker does not fail the poll: MassTransit keeps retrying the connection, so
+  `Publish` waits and the poll continues once the broker is back.
 
 ### Idempotency strategy
 
@@ -78,11 +80,14 @@ upsert.
 
 ### Easier
 
-- Polling and storage fail independently; a database outage fills the queue
-  instead of losing discoveries, and the backlog drains when it recovers.
+- Polling and storage fail independently: the in-memory retries absorb a short
+  database outage. After a longer one the affected messages are in the error queue,
+  and the next poll publishes every notice still inside the look-back window again.
 - Retries, error queue and fault events come from configuration, not hand-written
   ack/nack code; poisoned messages are visible in the management UI and can be moved
-  back to `notice-discovered` once fixed.
+  back to `notice-discovered` once fixed. The upsert does not compare versions, so
+  replaying an old message can overwrite newer data: after an outage, prefer the
+  next poll over a manual replay.
 - Later stages (documents, search, agent) can subscribe to `NoticeDiscovered` or to
   new events without touching the poller.
 - Tests run the production bus setup over a real RabbitMQ in Testcontainers, and the
@@ -109,3 +114,7 @@ upsert.
   libraries.
 - **Another moving part:** RabbitMQ must be running for ingestion; the worker exits
   at startup if the `messaging` connection string is missing.
+- **Poller and consumer share one host:** `TenderScout.Worker` runs both, which
+  guarantees the queues exist before the first publish. Running more than one replica
+  would multiply the TED polls, so scaling consumers is the point to move the poller
+  into its own host.
