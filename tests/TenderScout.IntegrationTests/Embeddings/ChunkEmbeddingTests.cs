@@ -102,7 +102,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     public async Task Run_StoresEveryValueAndTheModelName()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
-        await SeedAsync(connection, ("doc-1", 3), ("doc-2", 2));
+        await SeedAsync(connection, ("doc-1", 5));
 
         var report = await EmbedAsync(connection, batchSize: 2);
 
@@ -227,7 +227,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
 
         var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, batchSize: 2));
 
-        Assert.Contains("Batch 3", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("batch 3", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Connection refused", exception.Message, StringComparison.Ordinal);
         Assert.IsType<HttpRequestException>(exception.InnerException);
         Assert.Equal(3, _generator.Calls.Count);
@@ -307,7 +307,8 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         var connection = await database.CreateIsolatedDatabaseAsync();
         await SaveDocumentAsync(connection, "doc-a", 'a', "Pierwsza wersja A");
         await SaveDocumentAsync(connection, "doc-b", 'b', "Dokument B");
-        await EmbedAsync(connection);
+        await EmbedAsync(connection, docId: "doc-a");
+        await EmbedAsync(connection, docId: "doc-b");
         _generator.Calls.Clear();
 
         await SaveDocumentAsync(connection, "doc-a", 'c', "Druga wersja A");
@@ -320,7 +321,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
             Assert.All(b.Chunks, chunk => Assert.NotNull(chunk.Embedding));
         }
 
-        var report = await EmbedAsync(connection);
+        var report = await EmbedAsync(connection, docId: "doc-a");
 
         Assert.Equal(1, report.Embedded);
         Assert.Equal("Druga wersja A", _generator.Calls.Single().Single());
@@ -338,14 +339,12 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         int batchSize = 32,
         bool retryOnFailure = false,
         CancellationToken? cancellationToken = null,
-        string? docId = null)
+        string docId = "doc-1")
     {
         await using var dbContext = database.CreateDbContext(connection, retryOnFailure);
         var options = Options.Create(new EmbeddingOptions { Endpoint = "http://ollama.test:11434", Model = Model, BatchSize = batchSize });
         var embedder = new ChunkEmbedder(_generator, new ChunkEmbeddingRepository(dbContext), options, NullLogger<ChunkEmbedder>.Instance);
-        return docId is null
-            ? await embedder.RunAsync(cancellationToken ?? Ct)
-            : await embedder.RunForDocumentAsync(docId, cancellationToken ?? Ct);
+        return await embedder.RunForDocumentAsync(docId, cancellationToken ?? Ct);
     }
 
     private async Task AssertNothingStoredAsync(string connection)

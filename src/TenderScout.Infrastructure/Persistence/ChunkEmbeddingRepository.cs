@@ -13,30 +13,21 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// <summary>An HNSW scan returns at most <c>hnsw.ef_search</c> rows, 40 by default.</summary>
     internal const int MaxSearchResults = 40;
 
-    /// <summary>
-    /// Returns chunks without an embedding from <paramref name="model"/>, in id order: those of one document,
-    /// or of all documents when <paramref name="docId"/> is <see langword="null"/>.
-    /// </summary>
+    /// <summary>Returns the chunks of a document without an embedding from <paramref name="model"/>, in id order.</summary>
     public async Task<IReadOnlyList<ChunkToEmbed>> GetPendingAsync(
         string model,
-        string? docId,
+        string docId,
         int limit,
-        CancellationToken cancellationToken = default)
-    {
-        var chunks = dbContext.DocumentChunks.AsNoTracking();
-        if (docId is not null)
-        {
-            chunks = chunks.Where(c => dbContext.Documents.Any(d => d.Id == c.DocumentId && d.DocId == docId));
-        }
-
-        return await chunks
+        CancellationToken cancellationToken = default) =>
+        await dbContext.DocumentChunks
+            .AsNoTracking()
+            .Where(c => dbContext.Documents.Any(d => d.Id == c.DocumentId && d.DocId == docId))
             .Where(c => c.Embedding == null || c.EmbeddingModel != model)
             .OrderBy(c => c.Id)
             .Take(limit)
             .Select(c => new ChunkToEmbed(c.Id, c.Text))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-    }
 
     /// <summary>
     /// Stores the vectors and the model name as one unit. A chunk deleted in the meantime is not an error:
