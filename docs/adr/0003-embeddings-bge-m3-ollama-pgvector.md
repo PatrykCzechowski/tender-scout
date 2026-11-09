@@ -95,8 +95,11 @@ search, and `DocumentSearch` uses it. `SearchAsync` stays as the vector-only sea
   are dropped, and the rest are joined with `or` for `websearch_to_tsquery`. An AND of
   every word rarely matches a natural question, and PostgreSQL ranking ignores how
   rare a word is, so `jest` would count as much as `wadium`. Only letters and digits
-  survive, so a minus sign or a quote cannot act as an operator. Text candidates are
-  ranked with `ts_rank_cd`, over all chunks, also those without a vector.
+  survive, so a minus sign or a quote cannot act as an operator. Text candidates come
+  from all chunks, also those without a vector. Chunks containing a word with a digit
+  from the question come first, then `ts_rank_cd` decides: on the real documents a CPV
+  code found in one tender otherwise lost to the word "CPV", which appears in almost
+  every tender.
 - **Reciprocal Rank Fusion** merges the two rankings: each chunk scores the sum of
   1 / (60 + rank) over the rankings it appears in, ties go by chunk id. Each side
   gives 40 candidates, because an HNSW scan returns at most 40 (`hnsw.ef_search`), and

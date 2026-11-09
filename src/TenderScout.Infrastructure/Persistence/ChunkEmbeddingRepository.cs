@@ -157,18 +157,29 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// The content words of a question joined with OR. Only letters and digits survive, so the user cannot write
     /// operators; <see langword="null"/> when no word is left.
     /// </summary>
-    internal static string? ToTextQuery(string queryText)
-    {
-        var words = Regex.Matches(queryText.ToLowerInvariant(), @"[\p{L}\p{N}]+")
+    internal static string? ToTextQuery(string queryText) => JoinWithOr(ContentWords(queryText));
+
+    /// <summary>The content words that contain a digit, such as CPV codes or amounts, joined with OR.</summary>
+    internal static string? ToNumberQuery(string queryText) =>
+        JoinWithOr(ContentWords(queryText).Where(w => w.Any(char.IsDigit)));
+
+    private static IEnumerable<string> ContentWords(string queryText) =>
+        Regex.Matches(queryText.ToLowerInvariant(), @"[\p{L}\p{N}]+")
             .Select(m => m.Value)
             .Where(w => w.Length >= MinWordLength && !StopWords.Contains(w))
-            .Distinct()
-            .ToList();
+            .Distinct();
 
-        return words.Count == 0 ? null : string.Join(" or ", words);
+    private static string? JoinWithOr(IEnumerable<string> words)
+    {
+        var list = words.ToList();
+        return list.Count == 0 ? null : string.Join(" or ", list);
     }
 
-    /// <summary>Chunk ids ranked by full-text match, over all chunks, whether they have a vector or not.</summary>
+    /// <summary>
+    /// Chunk ids ranked by full-text match, over all chunks, whether they have a vector or not. Chunks containing a
+    /// number from the question come first: PostgreSQL ranking ignores how rare a word is, so a code would otherwise
+    /// lose to a common word next to it, such as "CPV".
+    /// </summary>
     private async Task<List<long>> TextSearchAsync(string queryText, CancellationToken cancellationToken)
     {
         if (ToTextQuery(queryText) is not { } textQuery)
@@ -176,10 +187,12 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
             return [];
         }
 
+        var numberQuery = ToNumberQuery(queryText) ?? textQuery;
         return await dbContext.DocumentChunks
             .AsNoTracking()
             .Where(c => c.SearchVector.Matches(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
-            .OrderByDescending(c => c.SearchVector.RankCoverDensity(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
+            .OrderByDescending(c => c.SearchVector.Matches(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, numberQuery)))
+            .ThenByDescending(c => c.SearchVector.RankCoverDensity(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
             .ThenBy(c => c.Id)
             .Take(CandidatesPerMethod)
             .Select(c => c.Id)

@@ -105,6 +105,18 @@ public sealed class HybridSearchTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task CodeInTheQuestion_OutranksAFrequentWordNextToIt()
+    {
+        var connection = await SeedAsync(
+            new("doc-1", 1, "Kody CPV: cpv dla części, cpv główny, cpv dodatkowy", null),
+            new("doc-2", 7, "Dostawa komputerów 30233100", null));
+
+        var results = await HybridAsync(connection, "CPV 30233100", Vector(1, 0));
+
+        Assert.Equal(("doc-2", 7), (results[0].DocId, results[0].PageNumber));
+    }
+
+    [Fact]
     public async Task MeaningMatch_IsFoundByVectorsWithoutSharedWords()
     {
         var connection = await SeedAsync(

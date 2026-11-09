@@ -90,6 +90,14 @@ public sealed class ChunkSearchValidationTests
         Assert.Null(ChunkEmbeddingRepository.ToTextQuery(question));
     }
 
+    [Theory]
+    [InlineData("CPV 72000000-5 i kwota 10000", "72000000 or 10000")]
+    [InlineData("Jaka jest wysokość wadium?", null)]
+    public void ToNumberQuery_KeepsOnlyWordsWithDigits(string question, string? expected)
+    {
+        Assert.Equal(expected, ChunkEmbeddingRepository.ToNumberQuery(question));
+    }
+
     [Fact]
     public async Task UsePgvector_KeepsConnectionAndRetrySettingsAlreadyConfigured()
     {
