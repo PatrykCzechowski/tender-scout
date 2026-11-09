@@ -30,11 +30,11 @@ public sealed partial class DocumentUploadedConsumer(
     {
         var message = context.Message;
 
-        // Published after the commit: if the process stops in between, redelivery publishes it.
-        if (await StoreIfChangedAsync(message, context.CancellationToken).ConfigureAwait(false))
-        {
-            await context.Publish(new ChunksCreated(message.DocId), context.CancellationToken).ConfigureAwait(false);
-        }
+        await StoreIfChangedAsync(message, context.CancellationToken).ConfigureAwait(false);
+
+        // Published after the commit: if the process stops in between, redelivery publishes it. For a skipped
+        // document it is harmless, because there are no chunks to embed.
+        await context.Publish(new ChunksCreated(message.DocId), context.CancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<(DocumentSkipReason? SkipReason, IReadOnlyList<DocumentChunk> Chunks)> ReadFileAsync(
@@ -70,15 +70,14 @@ public sealed partial class DocumentUploadedConsumer(
         }
     }
 
-    /// <returns>Whether the stored document has chunks.</returns>
-    private async Task<bool> StoreIfChangedAsync(DocumentUploaded message, CancellationToken cancellationToken)
+    private async Task StoreIfChangedAsync(DocumentUploaded message, CancellationToken cancellationToken)
     {
         var hash = await DocumentImporter.HashFileAsync(message.FullPath, cancellationToken).ConfigureAwait(false);
 
-        // The same file keeps its chunk ids and vectors. An earlier delivery may have stopped before publishing.
+        // The same file keeps its chunk ids and vectors.
         if (await repository.FindHashAsync(message.DocId, cancellationToken).ConfigureAwait(false) == hash)
         {
-            return await repository.HasChunksAsync(message.DocId, cancellationToken).ConfigureAwait(false);
+            return;
         }
 
         var (skipReason, chunks) = await ReadFileAsync(message.DocId, message.FullPath, options.Value, cancellationToken).ConfigureAwait(false);
@@ -86,7 +85,6 @@ public sealed partial class DocumentUploadedConsumer(
         var result = await repository.SaveAsync(document, chunks, cancellationToken).ConfigureAwait(false);
 
         LogStored(logger, message.DocId, result);
-        return chunks.Count > 0;
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Document {DocId}: {Result}")]

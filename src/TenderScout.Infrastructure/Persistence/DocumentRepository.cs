@@ -20,13 +20,6 @@ public sealed class DocumentRepository(TenderScoutDbContext dbContext, TimeProvi
             .SingleOrDefaultAsync(cancellationToken);
     }
 
-    /// <summary>Returns whether a stored document has any chunks; a skipped document has none.</summary>
-    public Task<bool> HasChunksAsync(string docId, CancellationToken cancellationToken = default) =>
-        dbContext.Documents
-            .Where(d => d.DocId == docId)
-            .SelectMany(d => d.Chunks)
-            .AnyAsync(cancellationToken);
-
     /// <summary>Stores the document and replaces its chunks, as one unit: on failure nothing changes.</summary>
     public Task<DocumentSaveResult> SaveAsync(
         TenderDocument document,

@@ -123,19 +123,15 @@ public sealed class DocumentRepositoryTests(PostgresFixture database)
     }
 
     [Fact]
-    public async Task HasChunks_TellsStoredChunksFromSkippedDocuments()
+    public async Task FindHash_ReturnsTheStoredHashOrNull()
     {
-        var withChunks = CreateDocument(UniqueId());
-        var skipped = CreateDocument(UniqueId()) with { SkipReason = DocumentSkipReason.UnsupportedFormat };
-        await SaveAsync(withChunks, Chunks("Tekst"));
-        await SaveAsync(skipped, []);
+        var document = CreateDocument(UniqueId());
+        await SaveAsync(document, Chunks("Tekst"));
 
         await using var dbContext = database.CreateDbContext();
         var repository = new DocumentRepository(dbContext, _time);
 
-        Assert.True(await repository.HasChunksAsync(withChunks.DocId, Ct));
-        Assert.False(await repository.HasChunksAsync(skipped.DocId, Ct));
-        Assert.Equal(withChunks.Sha256, await repository.FindHashAsync(withChunks.DocId, Ct));
+        Assert.Equal(document.Sha256, await repository.FindHashAsync(document.DocId, Ct));
         Assert.Null(await repository.FindHashAsync(UniqueId(), Ct));
     }
 

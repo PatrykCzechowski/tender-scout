@@ -10,6 +10,7 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
 builder.Services.AddChunkEmbeddings();
+builder.Services.AddScoped<DocumentSearchCommand>();
 
 using var host = builder.Build();
 await using var scope = host.Services.CreateAsyncScope();

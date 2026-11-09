@@ -21,7 +21,7 @@ public static class EmbeddingServiceCollectionExtensions
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Registers <see cref="ChunkEmbedder"/>, <see cref="DocumentSearchCommand"/>, their options (<c>Embedding</c> section) and the Ollama-backed
+    /// Registers <see cref="ChunkEmbedder"/>, its options (<c>Embedding</c> section) and the Ollama-backed
     /// <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/>. This is the only place that knows about Ollama.
     /// </summary>
     public static IHttpClientBuilder AddChunkEmbeddings(this IServiceCollection services)
@@ -35,7 +35,6 @@ public static class EmbeddingServiceCollectionExtensions
 
         services.AddScoped<ChunkEmbeddingRepository>();
         services.AddScoped<ChunkEmbedder>();
-        services.AddScoped<DocumentSearchCommand>();
 
         services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(serviceProvider =>
         {

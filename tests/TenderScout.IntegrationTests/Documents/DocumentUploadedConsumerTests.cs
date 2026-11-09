@@ -117,7 +117,7 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
     }
 
     [Fact]
-    public async Task DocumentWithoutText_IsSkippedOnceAndPublishesNothing()
+    public async Task DocumentWithoutText_IsSkippedOnceAndSendsNothingToTheGenerator()
     {
         await using var provider = await CreateProviderAsync();
         var harness = await StartHarnessAsync(provider);
@@ -125,12 +125,12 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
 
         await harness.Bus.Publish(message, Ct);
         await harness.Bus.Publish(message, Ct);
-        await WaitForConsumedAsync(harness, message.DocId, expected: 2);
+        await WaitForEmbeddingAsync(harness, message.DocId, expected: 2);
 
         var document = await SingleDocumentAsync(message.DocId);
         Assert.Equal(DocumentSkipReason.NoTextLayer, document.SkipReason);
         Assert.Empty(document.Chunks);
-        Assert.False(await harness.Published.Any<ChunksCreated>(m => m.Context.Message.DocId == message.DocId, Ct));
+        Assert.Empty(_generator.Calls);
     }
 
     [Fact]
@@ -141,12 +141,12 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         var message = CreateMessage([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00], ".docx");
 
         await harness.Bus.Publish(message, Ct);
-        await WaitForConsumedAsync(harness, message.DocId, expected: 1);
+        await WaitForEmbeddingAsync(harness, message.DocId, expected: 1);
 
         var document = await SingleDocumentAsync(message.DocId);
         Assert.Equal(DocumentSkipReason.UnsupportedFormat, document.SkipReason);
         Assert.Empty(document.Chunks);
-        Assert.False(await harness.Published.Any<ChunksCreated>(m => m.Context.Message.DocId == message.DocId, Ct));
+        Assert.Empty(_generator.Calls);
     }
 
     [Theory]
