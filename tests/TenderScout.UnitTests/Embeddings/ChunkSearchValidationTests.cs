@@ -38,6 +38,58 @@ public sealed class ChunkSearchValidationTests
         Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(21)]
+    public async Task HybridSearch_LimitOutOfRange_IsRejected(int limit)
+    {
+        await using var dbContext = CreateDbContext();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[ChunkEmbedding.Dimensions], "bge-m3", limit, Ct));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task HybridSearch_BlankText_IsRejected(string text)
+    {
+        await using var dbContext = CreateDbContext();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync(text, new float[ChunkEmbedding.Dimensions], "bge-m3", 5, Ct));
+    }
+
+    [Fact]
+    public async Task HybridSearch_WrongVectorLength_IsRejected()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[3], "bge-m3", 5, Ct));
+
+        Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Jaka jest wysokość wadium?", "wysokość or wadium")]
+    [InlineData("-wadium \"termin", "wadium or termin")]
+    [InlineData("CPV 72000000-5", "cpv or 72000000")]
+    [InlineData("Wadium, wadium!", "wadium")]
+    public void ToTextQuery_KeepsContentWordsJoinedWithOr(string question, string expected)
+    {
+        Assert.Equal(expected, ChunkEmbeddingRepository.ToTextQuery(question));
+    }
+
+    [Theory]
+    [InlineData("Jaka jest?")]
+    [InlineData("?! ... - \"")]
+    [InlineData("to na do")]
+    public void ToTextQuery_NoContentWords_GivesNull(string question)
+    {
+        Assert.Null(ChunkEmbeddingRepository.ToTextQuery(question));
+    }
+
     [Fact]
     public async Task UsePgvector_KeepsConnectionAndRetrySettingsAlreadyConfigured()
     {

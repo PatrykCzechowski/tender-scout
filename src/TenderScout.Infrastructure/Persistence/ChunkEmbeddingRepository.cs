@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
@@ -12,6 +13,26 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
 {
     /// <summary>An HNSW scan returns at most <c>hnsw.ef_search</c> rows, 40 by default.</summary>
     internal const int MaxSearchResults = 40;
+
+    /// <summary>PostgreSQL text search configuration of <c>search_vector</c>.</summary>
+    internal const string TextSearchConfiguration = "simple";
+
+    internal const int MaxHybridResults = 20;
+
+    /// <summary>Candidates taken from each ranking; the vector side cannot return more than an HNSW scan.</summary>
+    private const int CandidatesPerMethod = MaxSearchResults;
+
+    /// <summary>The usual Reciprocal Rank Fusion constant: it damps the difference between the top ranks.</summary>
+    private const int RrfConstant = 60;
+
+    private const int MinWordLength = 3;
+
+    /// <summary>Question and function words: frequent in questions, they say nothing about the passage.</summary>
+    private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
+    {
+        "jaka", "jaki", "jakie", "jest", "czy", "ile", "kiedy", "gdzie", "który", "która", "które", "oraz", "się",
+        "dla", "przez", "jako", "tym", "ten", "nie", "lub", "albo", "jak", "przy", "bez", "nad", "pod",
+    };
 
     /// <summary>Returns the chunks of a document without an embedding from <paramref name="model"/>, in id order.</summary>
     public async Task<IReadOnlyList<ChunkToEmbed>> GetPendingAsync(
@@ -89,6 +110,81 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
             .ConfigureAwait(false);
 
         return [.. rows.Select(row => new ChunkSearchResult(row.Id, row.DocId, row.PageNumber, row.Text, 1 - row.Distance))];
+    }
+
+    /// <summary>
+    /// Combines vector search with full-text search: each ranks its candidates and Reciprocal Rank Fusion merges
+    /// the two rankings, so a chunk found by either can be returned and one found by both ranks higher.
+    /// </summary>
+    /// <param name="queryText">The question, for the full-text side.</param>
+    /// <param name="queryVector">Its embedding from <paramref name="model"/>, for the vector side.</param>
+    /// <exception cref="ArgumentException">The text is blank, the limit is out of range or the vector has the wrong length.</exception>
+    public async Task<IReadOnlyList<ChunkSearchResult>> HybridSearchAsync(
+        string queryText,
+        ReadOnlyMemory<float> queryVector,
+        string model,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(queryText);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, MaxHybridResults);
+        var vectorRanking = await SearchAsync(queryVector, model, CandidatesPerMethod, cancellationToken).ConfigureAwait(false);
+        var textRanking = await TextSearchAsync(queryText, cancellationToken).ConfigureAwait(false);
+
+        var scores = new Dictionary<long, double>();
+        foreach (var ranking in new[] { vectorRanking.Select(r => r.ChunkId).ToList(), textRanking })
+        {
+            for (var rank = 1; rank <= ranking.Count; rank++)
+            {
+                scores[ranking[rank - 1]] = scores.GetValueOrDefault(ranking[rank - 1]) + (1.0 / (RrfConstant + rank));
+            }
+        }
+
+        var best = scores.OrderByDescending(s => s.Value).ThenBy(s => s.Key).Take(limit).ToList();
+        var ids = best.Select(s => s.Key).ToList();
+        var chunks = await dbContext.DocumentChunks
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Join(dbContext.Documents, c => c.DocumentId, d => d.Id, (c, d) => new { c.Id, d.DocId, c.PageNumber, c.Text })
+            .ToDictionaryAsync(c => c.Id, cancellationToken)
+            .ConfigureAwait(false);
+
+        return [.. best.Select(s => new ChunkSearchResult(s.Key, chunks[s.Key].DocId, chunks[s.Key].PageNumber, chunks[s.Key].Text, s.Value))];
+    }
+
+    /// <summary>
+    /// The content words of a question joined with OR. Only letters and digits survive, so the user cannot write
+    /// operators; <see langword="null"/> when no word is left.
+    /// </summary>
+    internal static string? ToTextQuery(string queryText)
+    {
+        var words = Regex.Matches(queryText.ToLowerInvariant(), @"[\p{L}\p{N}]+")
+            .Select(m => m.Value)
+            .Where(w => w.Length >= MinWordLength && !StopWords.Contains(w))
+            .Distinct()
+            .ToList();
+
+        return words.Count == 0 ? null : string.Join(" or ", words);
+    }
+
+    /// <summary>Chunk ids ranked by full-text match, over all chunks, whether they have a vector or not.</summary>
+    private async Task<List<long>> TextSearchAsync(string queryText, CancellationToken cancellationToken)
+    {
+        if (ToTextQuery(queryText) is not { } textQuery)
+        {
+            return [];
+        }
+
+        return await dbContext.DocumentChunks
+            .AsNoTracking()
+            .Where(c => c.SearchVector.Matches(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
+            .OrderByDescending(c => c.SearchVector.RankCoverDensity(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
+            .ThenBy(c => c.Id)
+            .Take(CandidatesPerMethod)
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task SaveOnceAsync(string model, IReadOnlyList<ChunkEmbedding> embeddings, CancellationToken cancellationToken)

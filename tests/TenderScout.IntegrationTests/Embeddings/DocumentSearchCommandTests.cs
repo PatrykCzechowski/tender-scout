@@ -43,7 +43,7 @@ public sealed class DocumentSearchCommandTests(PostgresFixture database)
     }
 
     [Fact]
-    public async Task EmbeddedChunks_PrintsTheBestFiveWithDocumentPageAndScore()
+    public async Task EmbeddedChunks_PrintsTheBestFiveFromHybridSearch()
     {
         var connection = await SeedAsync(
             ("doc-1", 2, "Fragment A", Vector(1, 0), Model),
@@ -59,7 +59,7 @@ public sealed class DocumentSearchCommandTests(PostgresFixture database)
 
         Assert.Equal(0, exitCode);
         var printed = _output.ToString();
-        Assert.StartsWith("1. score 1.000 | doc-1 | page 2", printed, StringComparison.Ordinal);
+        Assert.StartsWith("1. score 0.0164 | doc-1 | page 2", printed, StringComparison.Ordinal);
         var positions = new[] { "Fragment A", "Fragment B", "Fragment C", "Fragment D", "Fragment E" }
             .Select(text => printed.IndexOf(text, StringComparison.Ordinal))
             .ToList();
@@ -68,6 +68,17 @@ public sealed class DocumentSearchCommandTests(PostgresFixture database)
         Assert.DoesNotContain("Fragment F", printed, StringComparison.Ordinal);
         Assert.DoesNotContain("Inny model", printed, StringComparison.Ordinal);
         Assert.Equal(["Jaka jest wysokość wadium?"], _generator.Calls.Single());
+    }
+
+    [Fact]
+    public async Task ExactTermWithoutAVector_IsPrinted()
+    {
+        var connection = await SeedAsync(("doc-3", 4, "Kod CPV 72000000", Vector(0, 1), "other-model"));
+
+        var exitCode = await RunAsync(connection, "CPV 72000000");
+
+        Assert.Equal(0, exitCode);
+        Assert.StartsWith("1. score 0.0164 | doc-3 | page 4", _output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
