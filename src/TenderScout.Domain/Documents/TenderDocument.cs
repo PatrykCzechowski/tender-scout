@@ -26,3 +26,10 @@ public enum DocumentSkipReason
     /// <summary>A file format the import does not read, e.g. DOC or DOCX.</summary>
     UnsupportedFormat,
 }
+
+/// <summary>What storing a document did.</summary>
+public enum DocumentSaveResult
+{
+    Inserted,
+    Updated,
+}

@@ -34,9 +34,8 @@ builder.AddProject<Projects.TenderScout_Worker>("worker")
 
 // Developer command: starts only from the dashboard, so a long import never delays the services above.
 builder.AddProject<Projects.TenderScout_DocumentImport>("document-import")
-    .WithReference(database)
-    .WaitFor(database)
-    .WaitForCompletion(migrations)
+    .WithReference(rabbitmq)
+    .WaitFor(rabbitmq)
     .WithExplicitStart();
 
 // Developer command, kept apart from the import so documents can be imported while the Ollama machine is off.

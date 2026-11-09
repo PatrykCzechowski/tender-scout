@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Pgvector;
 using TenderScout.Domain.Documents;
-using TenderScout.Infrastructure.Documents;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.Tests.Shared;
@@ -276,23 +275,15 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     }
 
     [Fact]
-    public async Task Reimport_OfAChangedFile_ResetsOnlyThatDocument()
+    public async Task NewVersionOfADocument_ResetsOnlyThatDocument()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
-        using var folder = new DocumentTestFolder();
-        folder.Add("doc-a", "a.pdf", SyntheticPdf.WithText("Pierwsza wersja A"));
-        folder.Add("doc-b", "b.pdf", SyntheticPdf.WithText("Dokument B"));
-        await ImportAsync(connection, folder);
+        await SaveDocumentAsync(connection, "doc-a", 'a', "Pierwsza wersja A");
+        await SaveDocumentAsync(connection, "doc-b", 'b', "Dokument B");
         await EmbedAsync(connection);
         _generator.Calls.Clear();
 
-        await ImportAsync(connection, folder);
-        Assert.Equal(new ChunkEmbeddingReport(0, 0), await EmbedAsync(connection));
-
-        var changed = SyntheticPdf.WithText("Druga wersja A");
-        folder.WriteFile("a.pdf", changed);
-        folder.SetHash("doc-a", changed);
-        await ImportAsync(connection, folder);
+        await SaveDocumentAsync(connection, "doc-a", 'c', "Druga wersja A");
 
         await using (var dbContext = database.CreateDbContext(connection))
         {
@@ -305,7 +296,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         var report = await EmbedAsync(connection);
 
         Assert.Equal(1, report.Embedded);
-        Assert.Contains("Druga wersja A", _generator.Calls.Single().Single(), StringComparison.Ordinal);
+        Assert.Equal("Druga wersja A", _generator.Calls.Single().Single());
     }
 
     private static float[] Vector(float first)
@@ -333,11 +324,11 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         Assert.Equal(0, await dbContext.DocumentChunks.CountAsync(c => c.Embedding != null, Ct));
     }
 
-    private async Task ImportAsync(string connection, DocumentTestFolder folder)
+    private async Task SaveDocumentAsync(string connection, string docId, char hashCharacter, string text)
     {
         await using var dbContext = database.CreateDbContext(connection);
-        var repository = new DocumentRepository(dbContext, new FakeTimeProvider(Now));
-        await new DocumentImporter(repository, folder.Options(), DocumentTestFolder.Chunking, NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
+        var document = new TenderDocument(docId, "100001-2026", "swz", "a.pdf", new string(hashCharacter, 64), null);
+        await new DocumentRepository(dbContext, new FakeTimeProvider(Now)).SaveAsync(document, [new DocumentChunk(0, 1, text)], Ct);
     }
 
     private async Task<List<long>> SeedAsync(string connection, params (string DocId, int Chunks)[] documents)

@@ -3,9 +3,6 @@
     <UserSecretsId>tender-scout-document-import</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
     <ProjectReference Include="..\TenderScout.ServiceDefaults\TenderScout.ServiceDefaults.csproj" />
   </ItemGroup>

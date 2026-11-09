@@ -17,9 +17,6 @@ internal sealed class DocumentTestFolder : IDisposable
 
     public string ManifestPath => Path.Combine(_root.FullName, "manifest.csv");
 
-    public static IOptions<DocumentChunkingOptions> Chunking { get; } =
-        Microsoft.Extensions.Options.Options.Create(new DocumentChunkingOptions());
-
     public static string Hash(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
     /// <summary>Writes a file and lists it in the manifest with its real hash, unless <paramref name="sha256"/> says otherwise.</summary>

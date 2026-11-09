@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TenderScout.Contracts.Documents;
 using TenderScout.Domain.Documents;
+using TenderScout.Infrastructure.Persistence;
 
 namespace TenderScout.Infrastructure.Documents;
 
@@ -12,7 +13,7 @@ namespace TenderScout.Infrastructure.Documents;
 /// Safe to run any number of times: an unchanged file is not read or written again.
 /// </summary>
 public sealed partial class DocumentUploadedConsumer(
-    IDocumentRepository repository,
+    DocumentRepository repository,
     IOptions<DocumentChunkingOptions> options,
     ILogger<DocumentUploadedConsumer> logger)
     : IConsumer<DocumentUploaded>
@@ -36,7 +37,7 @@ public sealed partial class DocumentUploadedConsumer(
         }
     }
 
-    internal static async Task<(DocumentSkipReason? SkipReason, IReadOnlyList<DocumentChunk> Chunks)> ReadFileAsync(
+    private static async Task<(DocumentSkipReason? SkipReason, IReadOnlyList<DocumentChunk> Chunks)> ReadFileAsync(
         string docId,
         string fullPath,
         DocumentChunkingOptions settings,

@@ -1,48 +1,32 @@
 using System.Security.Cryptography;
+using MassTransit;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TenderScout.Domain.Documents;
+using TenderScout.Contracts.Documents;
 
 namespace TenderScout.Infrastructure.Documents;
 
 /// <summary>What one import run did.</summary>
-/// <param name="Imported">Documents stored for the first time with chunks.</param>
-/// <param name="Updated">Documents whose file changed and whose chunks were rebuilt.</param>
-/// <param name="Unchanged">Documents already stored with the same hash, skipped ones included.</param>
-/// <param name="Skipped">Documents newly recorded without chunks (no text layer, unsupported format).</param>
+/// <param name="Published">Rows that passed their checks and were sent for processing.</param>
 /// <param name="Ignored">Rows of a kind outside <see cref="DocumentImportOptions.DocKinds"/>.</param>
-/// <param name="Rejected">Rows that could not be imported; each message names the document and the problem.</param>
-public sealed record DocumentImportReport(
-    int Imported,
-    int Updated,
-    int Unchanged,
-    int Skipped,
-    int Ignored,
-    IReadOnlyList<string> Rejected)
+/// <param name="Rejected">Rows that could not be sent; each message names the document and the problem.</param>
+public sealed record DocumentImportReport(int Published, int Ignored, IReadOnlyList<string> Rejected)
 {
-    /// <summary>A skipped document is a known outcome; a rejected one needs attention and fails the run.</summary>
+    /// <summary>A rejected row needs attention and fails the run.</summary>
     public bool Succeeded => Rejected.Count == 0;
 }
 
 /// <summary>
-/// Imports the documents listed in the manifest. A rejected row does not stop the others, and each document
-/// is stored with its chunks as one unit, so a failed run can simply be started again.
+/// Checks the documents listed in the manifest and publishes one <see cref="DocumentUploaded"/> per valid row.
+/// A rejected row does not stop the others. Every valid row is published on every run, because processing
+/// an unchanged file again costs nothing, so running the import again repairs anything that failed.
 /// </summary>
 public sealed partial class DocumentImporter(
-    IDocumentRepository repository,
+    IPublishEndpoint publishEndpoint,
     IOptions<DocumentImportOptions> options,
-    IOptions<DocumentChunkingOptions> chunking,
     ILogger<DocumentImporter> logger)
 {
-    private enum RowOutcome
-    {
-        Imported,
-        Updated,
-        Unchanged,
-        Skipped,
-    }
-
-    /// <exception cref="DocumentImportException">The manifest itself cannot be used; nothing was stored.</exception>
+    /// <exception cref="DocumentImportException">The manifest itself cannot be used; nothing was published.</exception>
     public async Task<DocumentImportReport> RunAsync(CancellationToken cancellationToken = default)
     {
         var settings = options.Value;
@@ -50,8 +34,8 @@ public sealed partial class DocumentImporter(
         var kinds = new HashSet<string>(settings.DocKinds, StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        var outcomes = new Dictionary<RowOutcome, int>();
         var rejected = new List<string>();
+        var published = 0;
         var ignored = 0;
 
         foreach (var row in rows)
@@ -64,8 +48,8 @@ public sealed partial class DocumentImporter(
 
             try
             {
-                var outcome = await ImportRowAsync(row, settings, seen, cancellationToken).ConfigureAwait(false);
-                outcomes[outcome] = outcomes.GetValueOrDefault(outcome) + 1;
+                await PublishRowAsync(row, settings, seen, cancellationToken).ConfigureAwait(false);
+                published++;
             }
             catch (DocumentImportException ex)
             {
@@ -77,16 +61,8 @@ public sealed partial class DocumentImporter(
             }
         }
 
-        var report = new DocumentImportReport(
-            outcomes.GetValueOrDefault(RowOutcome.Imported),
-            outcomes.GetValueOrDefault(RowOutcome.Updated),
-            outcomes.GetValueOrDefault(RowOutcome.Unchanged),
-            outcomes.GetValueOrDefault(RowOutcome.Skipped),
-            ignored,
-            rejected);
-
-        LogFinished(logger, report.Imported, report.Updated, report.Unchanged, report.Skipped, report.Ignored, report.Rejected.Count);
-        return report;
+        LogFinished(logger, published, ignored, rejected.Count);
+        return new DocumentImportReport(published, ignored, rejected);
     }
 
     internal static string ResolvePath(string documentsFolder, ManifestRow row)
@@ -126,7 +102,7 @@ public sealed partial class DocumentImporter(
         }
     }
 
-    private async Task<RowOutcome> ImportRowAsync(
+    private async Task PublishRowAsync(
         ManifestRow row,
         DocumentImportOptions settings,
         HashSet<string> seen,
@@ -152,23 +128,11 @@ public sealed partial class DocumentImporter(
             throw new DocumentImportException($"{row.Label}: SHA-256 mismatch, expected {expected}, actual {actual}.");
         }
 
-        // The same hash means the same content. Changing only the chunk settings needs a cleared table.
-        if (await repository.FindHashAsync(row.DocId, cancellationToken).ConfigureAwait(false) == actual)
-        {
-            return RowOutcome.Unchanged;
-        }
-
-        var (skipReason, chunks) = await DocumentUploadedConsumer.ReadFileAsync(row.DocId, path, chunking.Value, cancellationToken).ConfigureAwait(false);
-        var document = new TenderDocument(row.DocId, row.PublicationNumber, row.Kind, row.Path, actual, skipReason);
-        var saved = await repository.SaveAsync(document, chunks, cancellationToken).ConfigureAwait(false);
-
-        if (skipReason is { } reason)
-        {
-            LogSkipped(logger, row.DocId, reason);
-            return RowOutcome.Skipped;
-        }
-
-        return saved == DocumentSaveResult.Inserted ? RowOutcome.Imported : RowOutcome.Updated;
+        // Mandatory: without a bound queue the broker would drop the message and the run would report success.
+        await publishEndpoint.Publish(
+            new DocumentUploaded(row.DocId, row.PublicationNumber, row.Kind, row.Path, path),
+            context => context.Mandatory = true,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private void Reject(List<string> rejected, string message, Exception exception)
@@ -177,11 +141,8 @@ public sealed partial class DocumentImporter(
         LogRejected(logger, message, exception);
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Document import finished: {Imported} imported, {Updated} updated, {Unchanged} unchanged, {Skipped} skipped, {Ignored} ignored, {Rejected} rejected")]
-    private static partial void LogFinished(ILogger logger, int imported, int updated, int unchanged, int skipped, int ignored, int rejected);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipped document {DocId}: {Reason}")]
-    private static partial void LogSkipped(ILogger logger, string docId, DocumentSkipReason reason);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Document import finished: {Published} published, {Ignored} ignored, {Rejected} rejected")]
+    private static partial void LogFinished(ILogger logger, int published, int ignored, int rejected);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Rejected document: {Problem}")]
     private static partial void LogRejected(ILogger logger, string problem, Exception exception);
