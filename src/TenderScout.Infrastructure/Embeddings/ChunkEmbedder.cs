@@ -11,7 +11,8 @@ public sealed record ChunkEmbeddingReport(int Embedded, int Batches);
 
 /// <summary>
 /// Embeds the chunks of a document that have no vector from the configured model, one saved batch at a time.
-/// A failed batch stops the run, because the next one would fail the same way; a later run resumes.
+/// Called by the <c>ChunksCreated</c> consumer: a failed batch fails the message, which is retried and then moved
+/// to the error queue; finished batches stay stored, so the next delivery embeds only what is left.
 /// </summary>
 public sealed partial class ChunkEmbedder(
     IEmbeddingGenerator<string, Embedding<float>> generator,
