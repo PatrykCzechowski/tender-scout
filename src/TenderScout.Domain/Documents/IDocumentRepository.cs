@@ -8,6 +8,9 @@ public interface IDocumentRepository
     /// <summary>Returns the stored file hash of a document, or <see langword="null"/> if it has not been stored yet.</summary>
     Task<string?> FindHashAsync(string docId, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns whether a stored document has any chunks; a skipped document has none.</summary>
+    Task<bool> HasChunksAsync(string docId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Stores the document and replaces its chunks, as one unit: on failure nothing changes.
     /// </summary>

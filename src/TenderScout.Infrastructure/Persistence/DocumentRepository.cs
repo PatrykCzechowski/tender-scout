@@ -16,6 +16,12 @@ internal sealed class DocumentRepository(TenderScoutDbContext dbContext, TimePro
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    public Task<bool> HasChunksAsync(string docId, CancellationToken cancellationToken = default) =>
+        dbContext.Documents
+            .Where(d => d.DocId == docId)
+            .SelectMany(d => d.Chunks)
+            .AnyAsync(cancellationToken);
+
     public Task<DocumentSaveResult> SaveAsync(
         TenderDocument document,
         IReadOnlyList<DocumentChunk> chunks,

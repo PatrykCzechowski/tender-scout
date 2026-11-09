@@ -352,7 +352,7 @@ public sealed class DocumentImportTests(PostgresFixture database) : IDisposable
 
         await using var dbContext = new TenderScoutDbContext(builder.Options);
         IOptions<DocumentImportOptions> options = _folder.Options();
-        var importer = new DocumentImporter(new DocumentRepository(dbContext, _time), options, NullLogger<DocumentImporter>.Instance);
+        var importer = new DocumentImporter(new DocumentRepository(dbContext, _time), options, DocumentTestFolder.Chunking, NullLogger<DocumentImporter>.Instance);
         return await importer.RunAsync(Ct);
     }
 

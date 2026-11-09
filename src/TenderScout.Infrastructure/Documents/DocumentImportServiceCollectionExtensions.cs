@@ -1,3 +1,4 @@
+using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -18,10 +19,34 @@ public static class DocumentImportServiceCollectionExtensions
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<DocumentImportOptions>, DocumentImportOptionsValidator>();
 
-        services.TryAddSingleton(TimeProvider.System);
-        services.AddScoped<IDocumentRepository, DocumentRepository>();
+        services.AddDocumentProcessing();
         services.AddScoped<DocumentImporter>();
 
         return services;
+    }
+
+    /// <summary>Registers the document repository and chunking options (<c>DocumentChunking</c> section).</summary>
+    public static IServiceCollection AddDocumentProcessing(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddOptions<DocumentChunkingOptions>()
+            .BindConfiguration(DocumentChunkingOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<DocumentChunkingOptions>, DocumentChunkingOptionsValidator>();
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<IDocumentRepository, DocumentRepository>();
+
+        return services;
+    }
+
+    /// <summary>Adds the consumers that process uploaded documents.</summary>
+    public static IBusRegistrationConfigurator AddDocumentConsumers(this IBusRegistrationConfigurator bus)
+    {
+        ArgumentNullException.ThrowIfNull(bus);
+
+        bus.AddConsumer<DocumentUploadedConsumer, DocumentUploadedConsumerDefinition>();
+        return bus;
     }
 }

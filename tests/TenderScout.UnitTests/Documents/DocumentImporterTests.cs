@@ -250,7 +250,7 @@ public sealed class DocumentImporterTests : IDisposable
     public async Task Run_Cancelled_StopsInsteadOfRejectingRows()
     {
         _folder.Add("swz-001", "a.pdf", SyntheticPdf.WithText("Serwery"));
-        var importer = new DocumentImporter(_repository, _folder.Options(), NullLogger<DocumentImporter>.Instance);
+        var importer = new DocumentImporter(_repository, _folder.Options(), DocumentTestFolder.Chunking, NullLogger<DocumentImporter>.Instance);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => importer.RunAsync(new CancellationToken(canceled: true)));
@@ -259,7 +259,7 @@ public sealed class DocumentImporterTests : IDisposable
     public void Dispose() => _folder.Dispose();
 
     private Task<DocumentImportReport> RunAsync(IOptions<DocumentImportOptions>? options = null) =>
-        new DocumentImporter(_repository, options ?? _folder.Options(), NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
+        new DocumentImporter(_repository, options ?? _folder.Options(), DocumentTestFolder.Chunking, NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
 
     private sealed class FakeDocumentRepository : IDocumentRepository
     {
@@ -269,6 +269,9 @@ public sealed class DocumentImporterTests : IDisposable
 
         public Task<string?> FindHashAsync(string docId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Saved.TryGetValue(docId, out var saved) ? saved.Document.Sha256 : null);
+
+        public Task<bool> HasChunksAsync(string docId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Saved.TryGetValue(docId, out var saved) && saved.Chunks.Count > 0);
 
         public Task<DocumentSaveResult> SaveAsync(
             TenderDocument document,

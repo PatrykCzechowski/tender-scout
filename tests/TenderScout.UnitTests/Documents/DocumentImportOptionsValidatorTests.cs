@@ -48,24 +48,6 @@ public sealed class DocumentImportOptionsValidatorTests
         Assert.Contains("DocumentImport:DocKinds", result.FailureMessage, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(0, 0, "ChunkSize")]
-    [InlineData(-5, 0, "ChunkSize")]
-    [InlineData(100, -1, "ChunkOverlap")]
-    [InlineData(100, 100, "ChunkOverlap")]
-    [InlineData(100, 200, "ChunkOverlap")]
-    public void Validate_InvalidChunkSettings_NamesTheSetting(int size, int overlap, string setting)
-    {
-        var options = CreateOptions();
-        options.ChunkSize = size;
-        options.ChunkOverlap = overlap;
-
-        var result = new DocumentImportOptionsValidator().Validate(null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains($"DocumentImport:{setting}", result.FailureMessage, StringComparison.Ordinal);
-    }
-
     private static DocumentImportOptions CreateOptions() =>
         new()
         {

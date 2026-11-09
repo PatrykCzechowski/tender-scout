@@ -17,6 +17,9 @@ internal sealed class DocumentTestFolder : IDisposable
 
     public string ManifestPath => Path.Combine(_root.FullName, "manifest.csv");
 
+    public static IOptions<DocumentChunkingOptions> Chunking { get; } =
+        Microsoft.Extensions.Options.Options.Create(new DocumentChunkingOptions());
+
     public static string Hash(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
     /// <summary>Writes a file and lists it in the manifest with its real hash, unless <paramref name="sha256"/> says otherwise.</summary>
@@ -44,7 +47,7 @@ internal sealed class DocumentTestFolder : IDisposable
         _lines[index] = _lines[index] with { Sha256 = Hash(content) };
     }
 
-    public IOptions<DocumentImportOptions> Options(int chunkSize = 1200, int chunkOverlap = 150)
+    public IOptions<DocumentImportOptions> Options()
     {
         var csv = new StringBuilder(Header).Append("\r\n");
         foreach (var line in _lines)
@@ -59,8 +62,6 @@ internal sealed class DocumentTestFolder : IDisposable
             DocumentsFolder = DocumentsFolder,
             ManifestPath = ManifestPath,
             DocKinds = ["swz"],
-            ChunkSize = chunkSize,
-            ChunkOverlap = chunkOverlap,
         });
     }
 

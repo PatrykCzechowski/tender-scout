@@ -1,6 +1,7 @@
 using MassTransit;
 using MassTransit.Logging;
 using MassTransit.Monitoring;
+using TenderScout.Infrastructure.Documents;
 using TenderScout.Infrastructure.Ingestion;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.Infrastructure.Ted;
@@ -14,12 +15,14 @@ builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbConte
 builder.Services.AddNoticePersistence();
 builder.Services.AddTedClient();
 builder.Services.AddNoticeIngestion();
+builder.Services.AddDocumentProcessing();
 
 var rabbitMq = builder.Configuration.GetConnectionString("messaging")
     ?? throw new InvalidOperationException("Connection string 'messaging' (RabbitMQ) is not configured.");
 
 builder.Services.AddMassTransit(bus => bus
     .AddNoticeIngestionConsumers()
+    .AddDocumentConsumers()
     .UsingTenderScoutRabbitMq(new Uri(rabbitMq)));
 
 // Start the bus before the poller publishes its first message.

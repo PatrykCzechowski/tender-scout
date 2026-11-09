@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TenderScout.Domain.Documents;
@@ -32,16 +31,9 @@ public sealed record DocumentImportReport(
 public sealed partial class DocumentImporter(
     IDocumentRepository repository,
     IOptions<DocumentImportOptions> options,
+    IOptions<DocumentChunkingOptions> chunking,
     ILogger<DocumentImporter> logger)
 {
-    /// <summary>Below this many non-whitespace characters in a whole PDF, it counts as a scan.</summary>
-    internal const int MinTextCharacters = 50;
-
-    /// <summary>The PDF format allows the header anywhere in the first kilobyte.</summary>
-    private const int PdfHeaderSearchLength = 1024;
-
-    private static readonly byte[] PdfHeader = Encoding.ASCII.GetBytes("%PDF-");
-
     private enum RowOutcome
     {
         Imported,
@@ -124,24 +116,13 @@ public sealed partial class DocumentImporter(
         return DocumentManifest.Read(stream);
     }
 
-    private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
+    internal static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
         var stream = File.OpenRead(path);
         await using (stream.ConfigureAwait(false))
         {
             var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
             return Convert.ToHexStringLower(hash);
-        }
-    }
-
-    private static async Task<bool> HasPdfHeaderAsync(string path, CancellationToken cancellationToken)
-    {
-        var stream = File.OpenRead(path);
-        await using (stream.ConfigureAwait(false))
-        {
-            var buffer = new byte[PdfHeaderSearchLength];
-            var read = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
-            return buffer.AsSpan(0, read).IndexOf(PdfHeader) >= 0;
         }
     }
 
@@ -177,7 +158,7 @@ public sealed partial class DocumentImporter(
             return RowOutcome.Unchanged;
         }
 
-        var (skipReason, chunks) = await ReadFileAsync(row, path, settings, cancellationToken).ConfigureAwait(false);
+        var (skipReason, chunks) = await DocumentUploadedConsumer.ReadFileAsync(row.DocId, path, chunking.Value, cancellationToken).ConfigureAwait(false);
         var document = new TenderDocument(row.DocId, row.PublicationNumber, row.Kind, row.Path, actual, skipReason);
         var saved = await repository.SaveAsync(document, chunks, cancellationToken).ConfigureAwait(false);
 
@@ -188,28 +169,6 @@ public sealed partial class DocumentImporter(
         }
 
         return saved == DocumentSaveResult.Inserted ? RowOutcome.Imported : RowOutcome.Updated;
-    }
-
-    private static async Task<(DocumentSkipReason? SkipReason, IReadOnlyList<DocumentChunk> Chunks)> ReadFileAsync(
-        ManifestRow row,
-        string path,
-        DocumentImportOptions settings,
-        CancellationToken cancellationToken)
-    {
-        if (!await HasPdfHeaderAsync(path, cancellationToken).ConfigureAwait(false))
-        {
-            return Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase)
-                ? throw new DocumentImportException($"{row.Label}: '{row.Path}' is not a valid PDF.")
-                : (DocumentSkipReason.UnsupportedFormat, []);
-        }
-
-        var pages = PdfTextExtractor.Extract(path);
-        if (pages.Sum(page => page.Text.Count(c => !char.IsWhiteSpace(c))) < MinTextCharacters)
-        {
-            return (DocumentSkipReason.NoTextLayer, []);
-        }
-
-        return (null, DocumentChunker.Split(pages, settings.ChunkSize, settings.ChunkOverlap));
     }
 
     private void Reject(List<string> rejected, string message, Exception exception)

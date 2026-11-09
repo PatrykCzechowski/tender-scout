@@ -337,7 +337,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     {
         await using var dbContext = database.CreateDbContext(connection);
         var repository = new DocumentRepository(dbContext, new FakeTimeProvider(Now));
-        await new DocumentImporter(repository, folder.Options(), NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
+        await new DocumentImporter(repository, folder.Options(), DocumentTestFolder.Chunking, NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
     }
 
     private async Task<List<long>> SeedAsync(string connection, params (string DocId, int Chunks)[] documents)
