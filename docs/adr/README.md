@@ -4,8 +4,9 @@ Significant technical decisions are recorded here, one file per decision, number
 in order (`NNNN-short-title.md`). Each record has the sections **Status**,
 **Context**, **Options considered**, **Decision** and **Consequences**.
 
-A record is not edited once accepted; to change a decision, add a new ADR that
-supersedes it and update the old one's status.
+A changed decision gets a new ADR that supersedes the old one, whose status is
+updated. Small extensions and clarifications are written into the accepted record
+instead, with a dated "amended" note in its status.
 
 | ADR | Title | Status |
 | --- | --- | --- |

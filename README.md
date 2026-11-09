@@ -109,8 +109,8 @@ Run on 2026-11-09 with the manifest of 68 rows, of which the 31 main tender spec
 | Skipped: Word file (DOC or DOCX) | 3 |
 | Rejected | 0 |
 
-The 27 indexed documents gave 3512 chunks, all embedded with `bge-m3`. A second import changed nothing and sent
-nothing to Ollama. The other 37 manifest rows (answers to bidders' questions and amendments) are ignored for now.
+The 27 indexed documents gave 3512 chunks. Starting from empty tables, the queue embedded all 3512 with `bge-m3`.
+A second import changed nothing and sent no request to Ollama. The other 37 manifest rows (answers to bidders' questions and amendments) are ignored for now.
 
 ## Architecture decisions
 
