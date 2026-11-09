@@ -2,6 +2,7 @@ using MassTransit;
 using MassTransit.Logging;
 using MassTransit.Monitoring;
 using TenderScout.Infrastructure.Documents;
+using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Ingestion;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.Infrastructure.Ted;
@@ -16,6 +17,7 @@ builder.Services.AddNoticePersistence();
 builder.Services.AddTedClient();
 builder.Services.AddNoticeIngestion();
 builder.Services.AddDocumentProcessing();
+builder.Services.AddChunkEmbeddings();
 
 var rabbitMq = builder.Configuration.GetConnectionString("messaging")
     ?? throw new InvalidOperationException("Connection string 'messaging' (RabbitMQ) is not configured.");

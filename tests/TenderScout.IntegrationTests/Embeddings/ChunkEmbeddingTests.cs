@@ -176,6 +176,33 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task RunForDocument_EmbedsOnlyItsPendingChunks()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 3), ("doc-2", 2));
+
+        var report = await EmbedAsync(connection, batchSize: 2, docId: "doc-1");
+
+        Assert.Equal(new ChunkEmbeddingReport(3, 2), report);
+        Assert.All(_generator.Calls.SelectMany(call => call), text => Assert.StartsWith("doc-1", text, StringComparison.Ordinal));
+        Assert.Equal(new ChunkEmbeddingReport(0, 0), await EmbedAsync(connection, docId: "doc-1"));
+        await using var dbContext = database.CreateDbContext(connection);
+        Assert.Equal(2, await dbContext.DocumentChunks.CountAsync(c => c.Embedding == null, Ct));
+    }
+
+    [Fact]
+    public async Task RunForDocument_GeneratorFails_NamesTheDocument()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 1));
+        _generator.FailOnCall = 1;
+
+        var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, docId: "doc-1"));
+
+        Assert.Contains("Document doc-1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Run_SecondTime_SendsNothingAndChangesNothing()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
@@ -310,12 +337,15 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         string connection,
         int batchSize = 32,
         bool retryOnFailure = false,
-        CancellationToken? cancellationToken = null)
+        CancellationToken? cancellationToken = null,
+        string? docId = null)
     {
         await using var dbContext = database.CreateDbContext(connection, retryOnFailure);
         var options = Options.Create(new EmbeddingOptions { Endpoint = "http://ollama.test:11434", Model = Model, BatchSize = batchSize });
         var embedder = new ChunkEmbedder(_generator, new ChunkEmbeddingRepository(dbContext), options, NullLogger<ChunkEmbedder>.Instance);
-        return await embedder.RunAsync(cancellationToken ?? Ct);
+        return docId is null
+            ? await embedder.RunAsync(cancellationToken ?? Ct)
+            : await embedder.RunForDocumentAsync(docId, cancellationToken ?? Ct);
     }
 
     private async Task AssertNothingStoredAsync(string connection)

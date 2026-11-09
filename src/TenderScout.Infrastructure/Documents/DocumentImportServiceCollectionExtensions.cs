@@ -2,6 +2,7 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
 
 namespace TenderScout.Infrastructure.Documents;
@@ -45,6 +46,7 @@ public static class DocumentImportServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(bus);
 
         bus.AddConsumer<DocumentUploadedConsumer, DocumentUploadedConsumerDefinition>();
+        bus.AddConsumer<ChunksCreatedConsumer, ChunksCreatedConsumerDefinition>();
         return bus;
     }
 }
