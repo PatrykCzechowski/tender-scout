@@ -5,6 +5,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
@@ -12,6 +13,7 @@
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\TenderScout.Api\TenderScout.Api.csproj" />
     <ProjectReference Include="..\..\src\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
