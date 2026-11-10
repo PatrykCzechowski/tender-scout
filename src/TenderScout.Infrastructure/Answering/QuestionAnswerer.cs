@@ -102,7 +102,7 @@ public sealed partial class QuestionAnswerer(
     };
 
     /// <summary>A question with a code or amount may be answerable even when its vector is far from every chunk.</summary>
-    private static bool ContainsNumberFrom(string question, IReadOnlyList<ChunkSearchResult> passages)
+    internal static bool ContainsNumberFrom(string question, IReadOnlyList<ChunkSearchResult> passages)
     {
         var numbers = ChunkEmbeddingRepository.NumberWords(question).ToList();
         return passages.Any(p => numbers.Any(n => p.Text.Contains(n, StringComparison.OrdinalIgnoreCase)));
