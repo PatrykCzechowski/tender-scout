@@ -27,10 +27,10 @@ public sealed partial class QuestionAnswerer(
     internal const int PassageCount = 5;
 
     /// <summary>
-    /// Lowest cosine similarity of the nearest chunk that lets a question reach the model. Provisional: measured
-    /// 0.53-0.55 for relevant passages and 0.23-0.29 for unrelated ones; day4-03 calibrates it.
+    /// Lowest cosine similarity of the nearest chunk that lets a question reach the model: the highest threshold
+    /// that refused no answerable golden-set question (calibration in ADR-0004, labels not yet verified).
     /// </summary>
-    internal const double MinSimilarity = 0.45;
+    internal const double MinSimilarity = 0.55;
 
     internal const int ContextTokens = 8192;
 
