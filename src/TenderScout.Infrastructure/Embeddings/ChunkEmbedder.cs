@@ -10,8 +10,9 @@ namespace TenderScout.Infrastructure.Embeddings;
 public sealed record ChunkEmbeddingReport(int Embedded, int Batches);
 
 /// <summary>
-/// Embeds every chunk without a vector from the configured model, one saved batch at a time.
-/// A failed batch stops the run, because the next one would fail the same way; a later run resumes.
+/// Embeds the chunks of a document that have no vector from the configured model, one saved batch at a time.
+/// Called by the <c>ChunksCreated</c> consumer: a failed batch fails the message, which is retried and then moved
+/// to the error queue; finished batches stay stored, so the next delivery embeds only what is left.
 /// </summary>
 public sealed partial class ChunkEmbedder(
     IEmbeddingGenerator<string, Embedding<float>> generator,
@@ -19,8 +20,9 @@ public sealed partial class ChunkEmbedder(
     IOptions<EmbeddingOptions> options,
     ILogger<ChunkEmbedder> logger)
 {
+    /// <summary>Embeds the pending chunks of one document.</summary>
     /// <exception cref="ChunkEmbeddingException">A batch failed; the message says which one and why.</exception>
-    public async Task<ChunkEmbeddingReport> RunAsync(CancellationToken cancellationToken = default)
+    public async Task<ChunkEmbeddingReport> RunForDocumentAsync(string docId, CancellationToken cancellationToken = default)
     {
         var settings = options.Value;
         var embedded = 0;
@@ -29,7 +31,7 @@ public sealed partial class ChunkEmbedder(
         while (true)
         {
             var batch = await repository
-                .GetPendingAsync(settings.Model, settings.BatchSize, cancellationToken)
+                .GetPendingAsync(settings.Model, docId, settings.BatchSize, cancellationToken)
                 .ConfigureAwait(false);
 
             if (batch.Count == 0)
@@ -37,7 +39,7 @@ public sealed partial class ChunkEmbedder(
                 break;
             }
 
-            var vectors = await GenerateAsync(batch, batches + 1, embedded, cancellationToken).ConfigureAwait(false);
+            var vectors = await GenerateAsync(batch, docId, batches + 1, embedded, cancellationToken).ConfigureAwait(false);
             await repository.SaveAsync(settings.Model, vectors, cancellationToken).ConfigureAwait(false);
 
             embedded += batch.Count;
@@ -73,11 +75,12 @@ public sealed partial class ChunkEmbedder(
 
     private async Task<List<ChunkEmbedding>> GenerateAsync(
         IReadOnlyList<ChunkToEmbed> batch,
+        string docId,
         int batchNumber,
         int alreadyStored,
         CancellationToken cancellationToken)
     {
-        var where = $"Batch {batchNumber} (chunks {batch[0].ChunkId}..{batch[^1].ChunkId}), {alreadyStored} chunks stored in this run";
+        var where = $"Document {docId}, batch {batchNumber} (chunks {batch[0].ChunkId}..{batch[^1].ChunkId}), {alreadyStored} chunks stored in this run";
 
         GeneratedEmbeddings<Embedding<float>> generated;
         try

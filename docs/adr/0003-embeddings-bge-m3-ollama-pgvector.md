@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-11-08
+Accepted — 2026-11-08, amended 2026-11-09 for the document pipeline (#18)
 
 ## Context
 
@@ -57,10 +57,19 @@ keep consistent, for a few thousand rows.
   compared by direction, and the score returned by search is cosine similarity
   (1 minus distance). N is capped at 40, the default `hnsw.ef_search`, which is the
   most an index scan returns.
-- **Embedding is a separate development command**, so documents can be imported
-  while the PC is off. Chunks go in batches of 32, each saved in its own transaction.
-  After a short retry a failing batch stops the run with a non-zero exit code, and
-  the next run continues with whatever has no vector yet.
+- **Embedding runs in the Worker, one document per `ChunksCreated` message**
+  (ADR-0002). This replaces the separate embedding command of the first version:
+  documents wait in the queue while the PC is off, so the import no longer needs a
+  command of its own to stay independent of Ollama. Chunks go in batches of 32, each
+  saved in its own transaction. A failing batch fails the message, which is retried
+  and then moved to `chunks-created_error`; running the import again embeds whatever
+  has no vector yet.
+- **The Worker starts without Ollama.** Its `appsettings.json` has a public default of
+  `http://localhost:11434`, and starting never contacts the endpoint, so notice
+  polling keeps working when the PC is off.
+- **Search is a development command**, `TenderScout.DocumentSearch`, run with
+  `dotnet run`. It embeds the question with the configured model and prints the five
+  nearest passages.
 - **Timeouts are set for this client on purpose.** Service defaults allow every
   `HttpClient` 10 s per attempt and 30 s in total, too little for a model that has
   to load first. This client allows `Embedding:RequestTimeout` (2 minutes) per
@@ -70,10 +79,10 @@ keep consistent, for a few thousand rows.
 
 ### Easier
 
-- Running the pass again costs nothing: only chunks without a vector from the
-  configured model are sent, and a failed run resumes.
-- A re-import of a changed file deletes its chunks and their vectors, and the next
-  pass embeds only the new ones. Reusing vectors for identical text is not worth the
+- Delivering `ChunksCreated` again costs nothing: only chunks without a vector from
+  the configured model are sent, and a failed message resumes where it stopped.
+- A re-import of a changed file deletes its chunks and their vectors, and its
+  `ChunksCreated` embeds only the new ones. Reusing vectors for identical text is not worth the
   logic for a two-minute full run.
 - Tests and CI use a fake generator and fixed vectors, so they need neither Ollama
   nor a network.
@@ -85,8 +94,8 @@ keep consistent, for a few thousand rows.
   Because the name is stored, changing `Embedding:Model` is enough to make the next
   pass replace the vectors, and search returns only chunks from the requested model.
   The name is compared exactly: `bge-m3` and `bge-m3:latest` count as different.
-- **Embedding needs the PC to be on.** Import, search over stored vectors and the
-  rest of the application do not.
+- **Embedding chunks and questions needs the PC to be on.** Importing, storing
+  chunks and the rest of the application do not.
 - **Azure is not solved here.** Production cannot reach the home network, so it needs
   a hosted `bge-m3` or a move to another provider, with a full re-embedding.
 - **The index is not used yet at this size.** With about 3500 rows PostgreSQL prefers

@@ -13,13 +13,15 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// <summary>An HNSW scan returns at most <c>hnsw.ef_search</c> rows, 40 by default.</summary>
     internal const int MaxSearchResults = 40;
 
-    /// <summary>Returns chunks without an embedding from <paramref name="model"/>, in id order.</summary>
+    /// <summary>Returns the chunks of a document without an embedding from <paramref name="model"/>, in id order.</summary>
     public async Task<IReadOnlyList<ChunkToEmbed>> GetPendingAsync(
         string model,
+        string docId,
         int limit,
         CancellationToken cancellationToken = default) =>
         await dbContext.DocumentChunks
             .AsNoTracking()
+            .Where(c => dbContext.Documents.Any(d => d.Id == c.DocumentId && d.DocId == docId))
             .Where(c => c.Embedding == null || c.EmbeddingModel != model)
             .OrderBy(c => c.Id)
             .Take(limit)

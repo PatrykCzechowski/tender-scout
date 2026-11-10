@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Pgvector;
 using TenderScout.Domain.Documents;
-using TenderScout.Infrastructure.Documents;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.Tests.Shared;
@@ -103,7 +102,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     public async Task Run_StoresEveryValueAndTheModelName()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
-        await SeedAsync(connection, ("doc-1", 3), ("doc-2", 2));
+        await SeedAsync(connection, ("doc-1", 5));
 
         var report = await EmbedAsync(connection, batchSize: 2);
 
@@ -177,6 +176,33 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task RunForDocument_EmbedsOnlyItsPendingChunks()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 3), ("doc-2", 2));
+
+        var report = await EmbedAsync(connection, batchSize: 2, docId: "doc-1");
+
+        Assert.Equal(new ChunkEmbeddingReport(3, 2), report);
+        Assert.All(_generator.Calls.SelectMany(call => call), text => Assert.StartsWith("doc-1", text, StringComparison.Ordinal));
+        Assert.Equal(new ChunkEmbeddingReport(0, 0), await EmbedAsync(connection, docId: "doc-1"));
+        await using var dbContext = database.CreateDbContext(connection);
+        Assert.Equal(2, await dbContext.DocumentChunks.CountAsync(c => c.Embedding == null, Ct));
+    }
+
+    [Fact]
+    public async Task RunForDocument_GeneratorFails_NamesTheDocument()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await SeedAsync(connection, ("doc-1", 1));
+        _generator.FailOnCall = 1;
+
+        var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, docId: "doc-1"));
+
+        Assert.Contains("Document doc-1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Run_SecondTime_SendsNothingAndChangesNothing()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
@@ -201,7 +227,7 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
 
         var exception = await Assert.ThrowsAsync<ChunkEmbeddingException>(() => EmbedAsync(connection, batchSize: 2));
 
-        Assert.Contains("Batch 3", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("batch 3", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Connection refused", exception.Message, StringComparison.Ordinal);
         Assert.IsType<HttpRequestException>(exception.InnerException);
         Assert.Equal(3, _generator.Calls.Count);
@@ -276,23 +302,16 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
     }
 
     [Fact]
-    public async Task Reimport_OfAChangedFile_ResetsOnlyThatDocument()
+    public async Task NewVersionOfADocument_ResetsOnlyThatDocument()
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
-        using var folder = new DocumentTestFolder();
-        folder.Add("doc-a", "a.pdf", SyntheticPdf.WithText("Pierwsza wersja A"));
-        folder.Add("doc-b", "b.pdf", SyntheticPdf.WithText("Dokument B"));
-        await ImportAsync(connection, folder);
-        await EmbedAsync(connection);
+        await SaveDocumentAsync(connection, "doc-a", 'a', "Pierwsza wersja A");
+        await SaveDocumentAsync(connection, "doc-b", 'b', "Dokument B");
+        await EmbedAsync(connection, docId: "doc-a");
+        await EmbedAsync(connection, docId: "doc-b");
         _generator.Calls.Clear();
 
-        await ImportAsync(connection, folder);
-        Assert.Equal(new ChunkEmbeddingReport(0, 0), await EmbedAsync(connection));
-
-        var changed = SyntheticPdf.WithText("Druga wersja A");
-        folder.WriteFile("a.pdf", changed);
-        folder.SetHash("doc-a", changed);
-        await ImportAsync(connection, folder);
+        await SaveDocumentAsync(connection, "doc-a", 'c', "Druga wersja A");
 
         await using (var dbContext = database.CreateDbContext(connection))
         {
@@ -302,10 +321,10 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
             Assert.All(b.Chunks, chunk => Assert.NotNull(chunk.Embedding));
         }
 
-        var report = await EmbedAsync(connection);
+        var report = await EmbedAsync(connection, docId: "doc-a");
 
         Assert.Equal(1, report.Embedded);
-        Assert.Contains("Druga wersja A", _generator.Calls.Single().Single(), StringComparison.Ordinal);
+        Assert.Equal("Druga wersja A", _generator.Calls.Single().Single());
     }
 
     private static float[] Vector(float first)
@@ -319,12 +338,13 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         string connection,
         int batchSize = 32,
         bool retryOnFailure = false,
-        CancellationToken? cancellationToken = null)
+        CancellationToken? cancellationToken = null,
+        string docId = "doc-1")
     {
         await using var dbContext = database.CreateDbContext(connection, retryOnFailure);
         var options = Options.Create(new EmbeddingOptions { Endpoint = "http://ollama.test:11434", Model = Model, BatchSize = batchSize });
         var embedder = new ChunkEmbedder(_generator, new ChunkEmbeddingRepository(dbContext), options, NullLogger<ChunkEmbedder>.Instance);
-        return await embedder.RunAsync(cancellationToken ?? Ct);
+        return await embedder.RunForDocumentAsync(docId, cancellationToken ?? Ct);
     }
 
     private async Task AssertNothingStoredAsync(string connection)
@@ -333,11 +353,11 @@ public sealed class ChunkEmbeddingTests(PostgresFixture database)
         Assert.Equal(0, await dbContext.DocumentChunks.CountAsync(c => c.Embedding != null, Ct));
     }
 
-    private async Task ImportAsync(string connection, DocumentTestFolder folder)
+    private async Task SaveDocumentAsync(string connection, string docId, char hashCharacter, string text)
     {
         await using var dbContext = database.CreateDbContext(connection);
-        var repository = new DocumentRepository(dbContext, new FakeTimeProvider(Now));
-        await new DocumentImporter(repository, folder.Options(), NullLogger<DocumentImporter>.Instance).RunAsync(Ct);
+        var document = new TenderDocument(docId, "100001-2026", "swz", "a.pdf", new string(hashCharacter, 64), null);
+        await new DocumentRepository(dbContext, new FakeTimeProvider(Now)).SaveAsync(document, [new DocumentChunk(0, 1, text)], Ct);
     }
 
     private async Task<List<long>> SeedAsync(string connection, params (string DocId, int Chunks)[] documents)

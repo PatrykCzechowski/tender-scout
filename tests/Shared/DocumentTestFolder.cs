@@ -44,7 +44,7 @@ internal sealed class DocumentTestFolder : IDisposable
         _lines[index] = _lines[index] with { Sha256 = Hash(content) };
     }
 
-    public IOptions<DocumentImportOptions> Options(int chunkSize = 1200, int chunkOverlap = 150)
+    public IOptions<DocumentImportOptions> Options()
     {
         var csv = new StringBuilder(Header).Append("\r\n");
         foreach (var line in _lines)
@@ -59,8 +59,6 @@ internal sealed class DocumentTestFolder : IDisposable
             DocumentsFolder = DocumentsFolder,
             ManifestPath = ManifestPath,
             DocKinds = ["swz"],
-            ChunkSize = chunkSize,
-            ChunkOverlap = chunkOverlap,
         });
     }
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-11-08
+Accepted — 2026-11-08, amended 2026-11-09 for the document pipeline (#18)
 
 ## Context
 
@@ -57,6 +57,28 @@ Raspberry Pi (linux-arm64), and a likely move to Azure Container Apps.
   broker does not fail the poll: MassTransit keeps retrying the connection, so
   `Publish` waits and the poll continues once the broker is back.
 
+### Documents
+
+The same approach carries tender documents through two steps (#18), both consumed
+by `TenderScout.Worker`:
+
+- `document-import` checks the manifest and publishes one **`DocumentUploaded`**
+  per valid row. The publish is **mandatory**: if no queue is bound yet, the broker
+  returns the message and the row is rejected, instead of being dropped while the
+  import reports success.
+- `DocumentUploadedConsumer` hashes the file, and only if the hash differs from the
+  stored one reads the PDF, splits it and stores the document with its chunks in
+  one transaction. Then it publishes **`ChunksCreated`**, always, also for an
+  unchanged or skipped document.
+- `ChunksCreatedConsumer` embeds the chunks of that one document that have no
+  vector yet (ADR-0003).
+- Both endpoints take **one message at a time** and retry **5 times with 1 to 30 s
+  backoff**, as constants. `document-uploaded` retries only transient database
+  failures, so a corrupted or missing file goes straight to its `_error` queue;
+  `chunks-created` also retries embedding failures.
+- Recovery after an outage is **running the import again**, not replaying error
+  queues.
+
 ### Idempotency strategy
 
 Delivery is **at least once**: the same notice arrives many times, through
@@ -75,6 +97,15 @@ why we need **no inbox (message deduplication table) and no transactional outbox
 for now: the poller writes nothing to the database, so there is no database write
 and publish to keep consistent, and the consumer has no side effect apart from the
 upsert.
+
+The document consumers follow the same rule. `DocumentUploadedConsumer` is the one
+place that writes and then publishes: it commits first and publishes after. If the
+process stops between the two, the message is not acknowledged, so the broker
+delivers it again; the second delivery finds the same hash, writes nothing and
+still publishes `ChunksCreated`. Publishing first would let the embedding step run
+before the chunks are visible. The in-memory outbox would not close this gap,
+because its buffer is lost when the process stops, and the EF Core outbox would add
+tables for a case redelivery already covers.
 
 ## Consequences
 
@@ -118,3 +149,9 @@ upsert.
   guarantees the queues exist before the first publish. Running more than one replica
   would multiply the TED polls, so scaling consumers is the point to move the poller
   into its own host.
+- **The import is a separate process:** on a fresh broker the Worker has to start
+  before the first import, because it creates the document queues. The mandatory
+  publish turns a wrong order into rejected rows instead of lost documents.
+- **One document message at a time** keeps the single GPU busy with one request and
+  removes races between duplicate messages, but stretches the time to `_error` when
+  Ollama is away: about 50 s per document with a closed port, measured.
