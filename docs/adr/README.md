@@ -13,3 +13,4 @@ instead, with a dated "amended" note in its status.
 | [0001](0001-dotnet-and-aspire.md) | .NET 10 with .NET Aspire for local orchestration | Accepted |
 | [0002](0002-messaging-masstransit-rabbitmq.md) | MassTransit v8 on RabbitMQ for notice ingestion, with idempotent consumers | Accepted |
 | [0003](0003-embeddings-bge-m3-ollama-pgvector.md) | `bge-m3` on Ollama, stored in pgvector with an HNSW cosine index | Accepted |
+| [0004](0004-answers-bielik-citations-refusal.md) | Answers from Bielik 4.5B with numbered-passage citations and a refusal rule | Accepted |
