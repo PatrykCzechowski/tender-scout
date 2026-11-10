@@ -71,11 +71,13 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// Returns the chunks nearest to the query vector, best first, among those embedded by <paramref name="model"/>:
     /// vectors from different models cannot be compared.
     /// </summary>
+    /// <param name="publicationNumber">Only chunks of this tender; <see langword="null"/> searches all.</param>
     /// <exception cref="ArgumentException">The limit is out of range or the vector has the wrong length.</exception>
     public async Task<IReadOnlyList<ChunkSearchResult>> SearchAsync(
         ReadOnlyMemory<float> queryVector,
         string model,
         int limit,
+        string? publicationNumber = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
@@ -91,8 +93,7 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
 
         // The limit stays next to the ordering so PostgreSQL can answer it from the HNSW index;
         // the document id is joined on afterwards.
-        var nearest = dbContext.DocumentChunks
-            .AsNoTracking()
+        var nearest = Chunks(publicationNumber)
             .Where(c => c.Embedding != null && c.EmbeddingModel == model)
             .OrderBy(c => c.Embedding!.CosineDistance(query))
             .Take(limit)
@@ -103,13 +104,13 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
                 dbContext.Documents,
                 chunk => chunk.DocumentId,
                 document => document.Id,
-                (chunk, document) => new { chunk.Id, document.DocId, chunk.PageNumber, chunk.Text, chunk.Distance })
+                (chunk, document) => new { chunk.Id, document.DocId, document.PublicationNumber, chunk.PageNumber, chunk.Text, chunk.Distance })
             .OrderBy(row => row.Distance)
             .ThenBy(row => row.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return [.. rows.Select(row => new ChunkSearchResult(row.Id, row.DocId, row.PageNumber, row.Text, 1 - row.Distance))];
+        return [.. rows.Select(row => new ChunkSearchResult(row.Id, row.DocId, row.PublicationNumber, row.PageNumber, row.Text, 1 - row.Distance))];
     }
 
     /// <summary>
@@ -118,19 +119,21 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// </summary>
     /// <param name="queryText">The question, for the full-text side.</param>
     /// <param name="queryVector">Its embedding from <paramref name="model"/>, for the vector side.</param>
+    /// <param name="publicationNumber">Only chunks of this tender, on both sides; <see langword="null"/> searches all.</param>
     /// <exception cref="ArgumentException">The text is blank, the limit is out of range or the vector has the wrong length.</exception>
     public async Task<IReadOnlyList<ChunkSearchResult>> HybridSearchAsync(
         string queryText,
         ReadOnlyMemory<float> queryVector,
         string model,
         int limit,
+        string? publicationNumber = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(queryText);
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, MaxHybridResults);
-        var vectorRanking = await SearchAsync(queryVector, model, CandidatesPerMethod, cancellationToken).ConfigureAwait(false);
-        var textRanking = await TextSearchAsync(queryText, cancellationToken).ConfigureAwait(false);
+        var vectorRanking = await SearchAsync(queryVector, model, CandidatesPerMethod, publicationNumber, cancellationToken).ConfigureAwait(false);
+        var textRanking = await TextSearchAsync(queryText, publicationNumber, cancellationToken).ConfigureAwait(false);
 
         var scores = new Dictionary<long, double>();
         foreach (var ranking in new[] { vectorRanking.Select(r => r.ChunkId).ToList(), textRanking })
@@ -146,11 +149,18 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
         var chunks = await dbContext.DocumentChunks
             .AsNoTracking()
             .Where(c => ids.Contains(c.Id))
-            .Join(dbContext.Documents, c => c.DocumentId, d => d.Id, (c, d) => new { c.Id, d.DocId, c.PageNumber, c.Text })
+            .Join(dbContext.Documents, c => c.DocumentId, d => d.Id, (c, d) => new { c.Id, d.DocId, d.PublicationNumber, c.PageNumber, c.Text })
             .ToDictionaryAsync(c => c.Id, cancellationToken)
             .ConfigureAwait(false);
 
-        return [.. best.Select(s => new ChunkSearchResult(s.Key, chunks[s.Key].DocId, chunks[s.Key].PageNumber, chunks[s.Key].Text, s.Value))];
+        // A re-import may delete a ranked chunk before it is read here; it is skipped instead of failing the search.
+        return [.. best
+            .Where(s => chunks.ContainsKey(s.Key))
+            .Select(s =>
+            {
+                var chunk = chunks[s.Key];
+                return new ChunkSearchResult(s.Key, chunk.DocId, chunk.PublicationNumber, chunk.PageNumber, chunk.Text, s.Value);
+            })];
     }
 
     /// <summary>
@@ -160,8 +170,11 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     internal static string? ToTextQuery(string queryText) => JoinWithOr(ContentWords(queryText));
 
     /// <summary>The content words that contain a digit, such as CPV codes or amounts, joined with OR.</summary>
-    internal static string? ToNumberQuery(string queryText) =>
-        JoinWithOr(ContentWords(queryText).Where(w => w.Any(char.IsDigit)));
+    internal static string? ToNumberQuery(string queryText) => JoinWithOr(NumberWords(queryText));
+
+    /// <summary>The content words of a question that contain a digit, lower case.</summary>
+    internal static IEnumerable<string> NumberWords(string queryText) =>
+        ContentWords(queryText).Where(w => w.Any(char.IsDigit));
 
     private static IEnumerable<string> ContentWords(string queryText) =>
         Regex.Matches(queryText.ToLowerInvariant(), @"[\p{L}\p{N}]+")
@@ -180,7 +193,7 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// number from the question come first: PostgreSQL ranking ignores how rare a word is, so a code would otherwise
     /// lose to a common word next to it, such as "CPV".
     /// </summary>
-    private async Task<List<long>> TextSearchAsync(string queryText, CancellationToken cancellationToken)
+    private async Task<List<long>> TextSearchAsync(string queryText, string? publicationNumber, CancellationToken cancellationToken)
     {
         if (ToTextQuery(queryText) is not { } textQuery)
         {
@@ -188,8 +201,7 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
         }
 
         var numberQuery = ToNumberQuery(queryText) ?? textQuery;
-        return await dbContext.DocumentChunks
-            .AsNoTracking()
+        return await Chunks(publicationNumber)
             .Where(c => c.SearchVector.Matches(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
             .OrderByDescending(c => c.SearchVector.Matches(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, numberQuery)))
             .ThenByDescending(c => c.SearchVector.RankCoverDensity(EF.Functions.WebSearchToTsQuery(TextSearchConfiguration, textQuery)))
@@ -198,6 +210,14 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
             .Select(c => c.Id)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private IQueryable<DocumentChunkEntity> Chunks(string? publicationNumber)
+    {
+        var chunks = dbContext.DocumentChunks.AsNoTracking();
+        return publicationNumber is null
+            ? chunks
+            : chunks.Where(c => dbContext.Documents.Any(d => d.Id == c.DocumentId && d.PublicationNumber == publicationNumber));
     }
 
     private async Task SaveOnceAsync(string model, IReadOnlyList<ChunkEmbedding> embeddings, CancellationToken cancellationToken)

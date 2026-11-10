@@ -20,7 +20,7 @@ public sealed class ChunkSearchValidationTests
         var repository = new ChunkEmbeddingRepository(dbContext);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => repository.SearchAsync(new float[ChunkEmbedding.Dimensions], "bge-m3", limit, Ct));
+            () => repository.SearchAsync(new float[ChunkEmbedding.Dimensions], "bge-m3", limit, cancellationToken: Ct));
     }
 
     [Theory]
@@ -33,7 +33,7 @@ public sealed class ChunkSearchValidationTests
         var repository = new ChunkEmbeddingRepository(dbContext);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => repository.SearchAsync(new float[length], "bge-m3", 5, Ct));
+            () => repository.SearchAsync(new float[length], "bge-m3", 5, cancellationToken: Ct));
 
         Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
     }
@@ -46,7 +46,7 @@ public sealed class ChunkSearchValidationTests
         await using var dbContext = CreateDbContext();
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[ChunkEmbedding.Dimensions], "bge-m3", limit, Ct));
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[ChunkEmbedding.Dimensions], "bge-m3", limit, cancellationToken: Ct));
     }
 
     [Theory]
@@ -57,7 +57,7 @@ public sealed class ChunkSearchValidationTests
         await using var dbContext = CreateDbContext();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync(text, new float[ChunkEmbedding.Dimensions], "bge-m3", 5, Ct));
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync(text, new float[ChunkEmbedding.Dimensions], "bge-m3", 5, cancellationToken: Ct));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public sealed class ChunkSearchValidationTests
         await using var dbContext = CreateDbContext();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[3], "bge-m3", 5, Ct));
+            () => new ChunkEmbeddingRepository(dbContext).HybridSearchAsync("wadium", new float[3], "bge-m3", 5, cancellationToken: Ct));
 
         Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
     }

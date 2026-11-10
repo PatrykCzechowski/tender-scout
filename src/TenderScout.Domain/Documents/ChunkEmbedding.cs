@@ -13,9 +13,10 @@ public sealed record ChunkEmbedding(long ChunkId, ReadOnlyMemory<float> Vector)
 /// <summary>A chunk found by vector or hybrid search.</summary>
 /// <param name="ChunkId">The chunk.</param>
 /// <param name="DocId">Manifest id of the document the chunk belongs to.</param>
+/// <param name="PublicationNumber">The tender the document belongs to.</param>
 /// <param name="PageNumber">One-based page where the chunk's own text starts.</param>
 /// <param name="Text">The passage.</param>
 /// <param name="Score">
 /// Higher is better. Cosine similarity for vector search; for hybrid search the Reciprocal Rank Fusion score.
 /// </param>
-public sealed record ChunkSearchResult(long ChunkId, string DocId, int PageNumber, string Text, double Score);
+public sealed record ChunkSearchResult(long ChunkId, string DocId, string PublicationNumber, int PageNumber, string Text, double Score);

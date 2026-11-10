@@ -96,7 +96,7 @@ public sealed class HybridSearchTests(PostgresFixture database)
             new("doc-2", 9, "Kod CPV 72000000-5 usługi informatyczne", Vector(0, 1)));
 
         await using var dbContext = database.CreateDbContext(connection);
-        var vectorOnly = await new ChunkEmbeddingRepository(dbContext).SearchAsync(Vector(1, 0), Model, 5, Ct);
+        var vectorOnly = await new ChunkEmbeddingRepository(dbContext).SearchAsync(Vector(1, 0), Model, 5, cancellationToken: Ct);
         var hybrid = await HybridAsync(connection, "CPV 72000000", Vector(1, 0), limit: 5);
 
         Assert.DoesNotContain(vectorOnly, r => r.Text.Contains("72000000", StringComparison.Ordinal));
@@ -238,7 +238,7 @@ public sealed class HybridSearchTests(PostgresFixture database)
     private async Task<IReadOnlyList<ChunkSearchResult>> HybridAsync(string connection, string text, float[] vector, int limit = 10)
     {
         await using var dbContext = database.CreateDbContext(connection);
-        return await new ChunkEmbeddingRepository(dbContext).HybridSearchAsync(text, vector, Model, limit, Ct);
+        return await new ChunkEmbeddingRepository(dbContext).HybridSearchAsync(text, vector, Model, limit, cancellationToken: Ct);
     }
 
     /// <summary>Stores chunks in the given order, so their ids follow it.</summary>

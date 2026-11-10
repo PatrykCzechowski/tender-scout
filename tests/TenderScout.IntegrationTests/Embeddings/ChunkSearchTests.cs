@@ -100,7 +100,7 @@ public sealed class ChunkSearchTests(PostgresFixture database)
     private async Task<IReadOnlyList<ChunkSearchResult>> SearchAsync(string connection, float[] query, int limit)
     {
         await using var dbContext = database.CreateDbContext(connection);
-        return await new ChunkEmbeddingRepository(dbContext).SearchAsync(query, Model, limit, Ct);
+        return await new ChunkEmbeddingRepository(dbContext).SearchAsync(query, Model, limit, cancellationToken: Ct);
     }
 
     private async Task<string> SeedAsync(params Seed[] seeds)

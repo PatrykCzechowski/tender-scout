@@ -63,6 +63,6 @@ public sealed class DocumentSearchCommand(
     {
         var settings = options.Value;
         var vector = await generator.GenerateVectorAsync(query, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return await repository.HybridSearchAsync(query, vector, settings.Model, ResultCount, cancellationToken).ConfigureAwait(false);
+        return await repository.HybridSearchAsync(query, vector, settings.Model, ResultCount, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }
