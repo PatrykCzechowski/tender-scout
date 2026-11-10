@@ -175,10 +175,9 @@ public sealed class AskEndpointTests(PostgresFixture database)
     [InlineData(Question, "   ", "publicationNumber")]
     public async Task InvalidInput_Is400_WithoutCallingAnyModel(string? question, string? publicationNumber, string field)
     {
-        var connection = await database.CreateIsolatedDatabaseAsync();
         question = question == "long" ? new string('a', 1001) : question;
 
-        var response = await AskAsync(connection, new { question, publicationNumber });
+        var response = await AskAsync(database.ConnectionString, new { question, publicationNumber });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
