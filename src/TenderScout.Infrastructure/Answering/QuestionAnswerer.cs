@@ -34,6 +34,12 @@ public sealed partial class QuestionAnswerer(
 
     internal const int ContextTokens = 8192;
 
+    /// <summary>
+    /// An answer with its citation numbers takes a few hundred tokens. Without a limit the model once kept writing for
+    /// minutes inside the JSON; a cut-off reply is not valid JSON, so it ends as a refusal.
+    /// </summary>
+    internal const int MaxAnswerTokens = 512;
+
     internal const string AnswerSchema = """
         {"type":"object","properties":{"answer":{"type":"string"},"citations":{"type":"array","items":{"type":"integer"}}},"required":["answer","citations"]}
         """;
@@ -90,6 +96,7 @@ public sealed partial class QuestionAnswerer(
     internal static ChatOptions CreateChatOptions() => new()
     {
         Temperature = 0,
+        MaxOutputTokens = MaxAnswerTokens,
         ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonDocument.Parse(AnswerSchema).RootElement, "answer"),
         AdditionalProperties = new() { ["num_ctx"] = ContextTokens },
     };
