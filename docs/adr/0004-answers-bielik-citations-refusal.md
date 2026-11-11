@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-11-10, amended 2026-11-10 (threshold calibrated on the golden set, answer length limit)
+Accepted — 2026-11-10, amended 2026-11-10 (answer length limit, first golden-set measurement of the threshold)
 
 ## Context
 
@@ -68,15 +68,17 @@ access to it. The documents are Polish.
 - **Refusal rule.** The endpoint answers 200 with `refused: true`, the fixed message
   `Nie znalazłem odpowiedzi w dokumentach.` and no citations when:
   1. hybrid search returns no passage (for example an unknown publication number), or
-  2. the cosine similarity of the nearest chunk is below **0.55** and no passage
+  2. the cosine similarity of the nearest chunk is below **0.45** and no passage
      contains a word with a digit from the question, or
   3. the model's reply is not valid JSON, or has no answer, or no valid citation.
 
   Rules 1 and 2 are checked before the chat model is called. Fused RRF scores depend
   only on rank, so the similarity comes from a separate vector search with limit 1
   and the same tender filter. The digit exception keeps questions about a CPV code or
-  an amount answerable, because their vector can be far from every chunk. The
-  threshold was 0.45 until the golden-set evaluation below calibrated it.
+  an amount answerable, because their vector can be far from every chunk. 0.45 lies
+  between the similarities seen in the first real run for relevant passages
+  (0.53-0.55) and for unrelated sentences (0.23-0.29). **It is provisional**: the
+  golden-set measurement below could not calibrate it yet.
 - **Errors.** Bad input is 400 with problem details naming the field (question blank
   or over 1000 characters, publication number not like `123456-2026`). A connection
   error, an HTTP error such as a model that is not pulled, or a timeout from either
@@ -105,7 +107,7 @@ All 10 replies were valid JSON matching the schema. In the first run the model c
 dropped and the question refused. The sentence "a nie numery stron" in the prompt
 fixed it. Answers took 8-25 s and prompts had 1250-1900 tokens.
 
-### Calibration on the golden set, 2026-11-10
+### Golden-set measurement of the threshold, 2026-11-10 (provisional)
 
 The evaluation (`evals/README.md`) recorded the nearest-chunk similarity of 40 golden
 questions, each limited to its tender: 32 answerable, 8 without an answer, labels not
@@ -118,16 +120,20 @@ yet verified. Rates of questions below each threshold:
 | 0.55 | 0.00 | 0.25 |
 | 0.60 | 0.28 | 0.75 |
 
-0.55 is the highest threshold with at most 10% false refusals. Answerable questions
-scored 0.56-0.74 and those without an answer 0.49-0.62, so the threshold mainly stops
-off-topic questions; the model refuses the rest. The digit exception applied to all
-40 questions, because each names a publication number ending in the year, so in this
-run the threshold refused nothing; without the exception it would have refused one
-more question without an answer and no answerable one. Re-run on verified labels.
+By similarity alone 0.55 is the highest threshold with at most 10% false refusals.
+**The constant stays 0.45.** The digit exception applied to all 40 questions,
+because each names a publication number ending in the year, so in this run no
+threshold refused anything and the table shows what a threshold would do, not what
+it did. The lowest answerable question scored 0.56, which leaves 0.55 almost no
+margin, and the relevant passages of the first real run scored 0.53-0.55. Answerable
+questions scored 0.56-0.74 and those without an answer 0.49-0.62, so the threshold
+mainly stops off-topic questions; the model refuses the rest. The threshold will be
+calibrated after the digit exception is narrowed and the labels are verified, with
+questions that contain no number.
 
 The 512-token limit was added after one answer kept generating inside the JSON for
 more than 2800 tokens; a reply cut off at the limit is not valid JSON and ends as a
-refusal. In the calibrated run no answer reached it.
+refusal. In the measured run no answer reached it.
 
 ## Consequences
 
@@ -141,9 +147,9 @@ refusal. In the calibrated run no answer reached it.
 
 ### Costs and risks
 
-- **Paraphrases are refused** while their similarity stays under 0.55, for example
+- **Paraphrases are refused** while their similarity stays under 0.45, for example
   the legal synonym measured at 0.27. In the golden set no answerable question,
-  paraphrased or not, scored below 0.55.
+  paraphrased or not, scored below 0.56, but every question there names its tender.
 - **The digit exception is too broad.** A year matches almost every passage, so a
   question naming a tender or a date skips the threshold. Narrowing it is a separate
   change, measured with this evaluation.

@@ -130,10 +130,14 @@ starts with Ollama off. An answer takes several seconds; the example above is in
 about the indexed documents and writes `artifacts/eval/<UTC time>.json`; `--retrieval-only` skips the chat models.
 The golden set format, the metric definitions and the CI gate are described in [evals/README.md](evals/README.md).
 
-Run on 2026-11-10 at `8c914b2`: 27 documents, 3512 chunks, embeddings `bge-m3`, answers
+Run on 2026-11-10: 27 documents, 3512 chunks, embeddings `bge-m3`, answers
 `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0`, judge `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M`. Golden set: 40
 questions (32 answerable, 12 of them paraphrased; 8 without an answer), labels: 40 auto, 0 verified. Every question
 names its tender, and search and `/ask` were limited to it.
+
+The run used the search and answering code as in commit `8c914b2`, where the refusal threshold was 0.55. The results
+file records the commit the command was built from, which cannot show whether the working tree was unchanged, so
+treat these numbers as a first measurement. They will be re-run from a clean checkout once the labels are verified.
 
 | Search | All (32) recall@5 | All MRR@10 | Paraphrased (12) recall@5 | Literal (20) recall@5 |
 | --- | ---: | ---: | ---: | ---: |
@@ -149,9 +153,21 @@ names its tender, and search and `/ask` were limited to it.
 | Correct refusals | 0.50 of 8 |
 | False refusals | 0.19 of 32 |
 
-- **Refusal threshold 0.55.** The highest threshold that refused no answerable question; 0.60 would refuse 28% of
-  them. The answerable questions' nearest chunks scored 0.56-0.74, those without an answer 0.49-0.62, so similarity
-  alone separates them poorly. Provisional until the labels are verified.
+Share of questions whose nearest chunk is below each threshold, by similarity alone (provisional):
+
+| Threshold | False refusals (of 32) | Correct refusals (of 8) |
+| ---: | ---: | ---: |
+| 0.30-0.45 | 0.00 | 0.00 |
+| 0.50 | 0.00 | 0.12 |
+| 0.55 | 0.00 | 0.25 |
+| 0.60 | 0.28 | 0.75 |
+
+- **The refusal threshold stays 0.45.** By this table 0.55 is the highest threshold with at most 10% false refusals,
+  but the run could not confirm it: the number exception applied to all 40 questions, so no threshold refused
+  anything, and the answer metrics above do not depend on it. The lowest answerable question scored 0.56, which
+  leaves 0.55 almost no margin. The answerable questions' nearest chunks scored 0.56-0.74, those without an answer
+  0.49-0.62, so similarity alone separates them poorly. The threshold will be calibrated after the number exception
+  is narrowed and the labels are verified.
 - **Hybrid search loses the 5 paraphrased questions** that vector search finds: full-text finds none of their
   answers, and fusion ranks chunks found by both searches above an answer found by one. It wins on literal questions
   (0.85 against 0.55).
@@ -159,13 +175,14 @@ names its tender, and search and `/ask` were limited to it.
   number, which ends in the year, so the rule promotes any passage with the year. Without it full-text gets recall@5
   0.53 and MRR@10 0.38, hybrid 0.56 and 0.35.
 - **The number exception to the early refusal applied to all 40 questions** for the same reason, so the threshold
-  never ran. Without it, one more question without an answer would have been refused before the model, and no
-  answerable one.
+  never ran.
 - Without the tender filter recall@5 is 0.22 (vector), 0.03 (full-text) and 0.12 (hybrid).
 - Of the 10 refusals by the model, 9 had no citation and 1 cited a page number instead of a passage number.
 - The judge is from the same family as the answering model.
 
-CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama:
+CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
+that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
+fusion and the stop-word list:
 
 | Search | Recall@5 | Threshold | MRR@10 | Threshold |
 | --- | ---: | ---: | ---: | ---: |

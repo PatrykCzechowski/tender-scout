@@ -52,9 +52,13 @@ Recall and MRR are given for vector, full-text and hybrid search, for all answer
 paraphrased and literal ones. Every method gets the same question and tender; vector and hybrid get the same vector.
 
 **Refusal threshold.** For every question the command records the cosine similarity of the nearest chunk, the value
-`/ask` compares with its threshold, and prints the false and correct refusal rates for thresholds 0.30 to 0.60. The
-chosen one is the highest whose false refusals stay at or below 10%. The table uses similarity alone: `/ask` skips the
+`/ask` compares with its threshold, and prints the false and correct refusal rates for thresholds 0.30 to 0.60. It
+marks the highest one whose false refusals stay at or below 10%. The table uses similarity alone: `/ask` skips the
 threshold when a passage contains a number from the question, and the command counts those questions separately.
+
+The table is a measurement, not a setting: the constant in `/ask` is changed by hand. It stays 0.45 for now. In the
+first run the number exception applied to every golden question, so no threshold was exercised, and the labels are
+not verified. The threshold will be calibrated after the exception is narrowed and the labels are verified.
 
 **Judge.** After all questions are answered, a second model gets each answer with its cited passages and returns
 `{"faithful": bool, "reason": string}` through a JSON schema at temperature 0. The phases are separate so the two
@@ -91,9 +95,17 @@ similarity by more than 0.0002. The test loads them into the test PostgreSQL, ru
 recall@5 or MRR@10 drops below its threshold, naming the metric, its value and the threshold. Each threshold is the
 measured value minus 0.05, rounded down to 0.05.
 
-The gate catches a broken text query or a broken vector search. It does not catch hybrid search replaced by vector
-search alone, nor a removed stop-word list: on 30 short passages `bge-m3` alone puts 19 of 20 answers in the top 5, so
-those changes move no metric by 0.05.
+The gate is a coarse check that the three searches still find the answers in realistic text: a text query that
+matches nothing fails it with full-text recall@5 at 0.00. It is not the test of fusion or of the stop-word list. On 30
+short passages `bge-m3` alone puts 19 of 20 answers in the top 5, so neither change below moves a metric under its
+threshold. Other tests in the same `dotnet test` run fail instead (measured on 277 tests):
+
+| Regression | Gate | Tests that fail |
+| --- | --- | --- |
+| Hybrid search returns the vector ranking only | Passes | 11: nine cases in `HybridSearchTests` (`ExactTerm_IsFoundByFullTextWhereVectorsMissIt`, `FoundByBoth_RanksAboveTheTopOfEitherRanking`, `ChunkFirstInBothRankings_ScoresTwiceTheTopOfOne`, `CodeInTheQuestion_OutranksAFrequentWordNextToIt`, `Diacritics_AreKept`, `NewVersionOfAChunk_IsFoundByItsNewText`, `QuestionWords_DoNotMakeAChunkACandidate` and both cases of `OperatorsInTheQuestion_AreTreatedAsWords`), `AskEndpointTests.Answer_CitesTheStoredPassagesTheModelChose` and `DocumentSearchCommandTests.ExactTermWithoutAVector_IsPrinted` |
+| Empty stop-word list | Passes | 3: `HybridSearchTests.QuestionWords_DoNotMakeAChunkACandidate` and one case each of `ChunkSearchValidationTests.ToTextQuery_KeepsContentWordsJoinedWithOr` and `ToTextQuery_NoContentWords_GivesNull` |
+
+Synthetic cases that make the gate itself fail on these changes are left for later; the set is not tuned to them.
 
 Regenerate the vectors only when the embedding model changes, against a real model:
 
