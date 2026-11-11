@@ -8,8 +8,10 @@ namespace TenderScout.IntegrationTests.Evaluation;
 
 /// <summary>
 /// The CI gate: 30 invented passages and 20 invented questions with stored bge-m3 vectors, so no model runs.
-/// Each threshold is the value measured on 2026-11-10 with bge-m3 minus 0.05, rounded down to 0.05: a small
-/// deliberate change passes, a broken fusion or text query does not. The README shows the same numbers.
+/// Each threshold is the value measured on 2026-11-10 with bge-m3 minus 0.05, rounded down to 0.05, so a small
+/// deliberate change passes and a search that stops finding the answers does not. The README shows the same numbers.
+/// The set is too easy for vector search to notice fusion reduced to the vector ranking or an emptied stop-word
+/// list; HybridSearchTests and ChunkSearchValidationTests fail on those (evals/README.md lists the tests).
 /// </summary>
 public sealed class RetrievalGateTests(PostgresFixture database)
 {
