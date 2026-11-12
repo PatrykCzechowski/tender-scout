@@ -202,7 +202,7 @@ internal static partial class DocumentChunker
             _hasBody |= !isHeading;
         }
 
-        public IReadOnlyList<DocumentChunk> Complete()
+        public List<DocumentChunk> Complete()
         {
             Flush();
             return _chunks;

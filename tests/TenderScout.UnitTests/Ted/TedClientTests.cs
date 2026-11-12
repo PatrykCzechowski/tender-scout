@@ -195,7 +195,7 @@ public sealed class TedClientTests
         var exception = await Assert.ThrowsAsync<TedApiException>(
             () => Client(provider).SearchNoticesAsync(Day, Day, TestContext.Current.CancellationToken));
 
-        Assert.IsAssignableFrom<Polly.ExecutionRejectedException>(exception.InnerException);
+        Assert.IsType<Polly.ExecutionRejectedException>(exception.InnerException, exactMatch: false);
         Assert.Equal(2, handler.Requests.Count);
     }
 

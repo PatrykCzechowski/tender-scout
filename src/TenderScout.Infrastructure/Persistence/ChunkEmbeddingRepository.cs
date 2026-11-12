@@ -9,7 +9,7 @@ namespace TenderScout.Infrastructure.Persistence;
 /// <summary>
 /// Stores chunk embeddings and finds the chunks nearest to a query vector.
 /// </summary>
-public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
+public sealed partial class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
 {
     /// <summary>An HNSW scan returns at most <c>hnsw.ef_search</c> rows, 40 by default.</summary>
     internal const int MaxSearchResults = 40;
@@ -177,10 +177,14 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
         ContentWords(queryText).Where(w => w.Any(char.IsDigit));
 
     private static IEnumerable<string> ContentWords(string queryText) =>
-        Regex.Matches(queryText.ToLowerInvariant(), @"[\p{L}\p{N}]+")
+        Word().Matches(queryText.ToLowerInvariant())
             .Select(m => m.Value)
             .Where(w => w.Length >= MinWordLength && !StopWords.Contains(w))
             .Distinct();
+
+    /// <summary>A run of letters and digits.</summary>
+    [GeneratedRegex(@"[\p{L}\p{N}]+")]
+    private static partial Regex Word();
 
     private static string? JoinWithOr(IEnumerable<string> words)
     {

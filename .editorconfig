@@ -1,0 +1,9 @@
+root = true
+
+# EF Core generates the migrations; analyzers skip generated code.
+[src/TenderScout.Infrastructure/Persistence/Migrations/*.cs]
+generated_code = true
+
+# Test code is not a hot path, so performance suggestions (static members, cached options, constant arrays) are off.
+[tests/**.cs]
+dotnet_analyzer_diagnostic.category-Performance.severity = none
