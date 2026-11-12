@@ -22,6 +22,12 @@ public sealed class NoticeDiscoveredConsumerTests(PostgresFixture database, Rabb
     private const string ErrorQueue = "notice-discovered_error";
     private const int RetryLimit = 2;
 
+    /// <summary>
+    /// The harness stops waiting for messages, for good, once the bus was idle this long, and it counts from before
+    /// the bus has connected. Its default of 1.2 s is shorter than the first connection to the broker on a slow machine.
+    /// </summary>
+    private static readonly TimeSpan InactivityTimeout = TimeSpan.FromSeconds(10);
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -106,6 +112,7 @@ public sealed class NoticeDiscoveredConsumerTests(PostgresFixture database, Rabb
             .AddNoticePersistence()
             .AddNoticeIngestion()
             .AddMassTransitTestHarness(bus => bus
+                .SetTestTimeouts(testInactivityTimeout: InactivityTimeout)
                 .AddNoticeIngestionConsumers()
                 .UsingTenderScoutRabbitMq(rabbitMq.Uri));
 
