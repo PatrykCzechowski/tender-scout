@@ -5,7 +5,7 @@ namespace TenderScout.Api;
 
 /// <param name="Question">Up to <see cref="AskEndpoint.MaxQuestionLength"/> characters.</param>
 /// <param name="PublicationNumber">Limits the search to one tender, e.g. <c>123456-2026</c>.</param>
-public sealed record AskRequest(string? Question, string? PublicationNumber);
+public sealed record AskRequest(string? Question, string? PublicationNumber = null);
 
 /// <summary><c>POST /ask</c>: 200 with an answer or a refusal, 400 for bad input, 503 when a model cannot be reached.</summary>
 public static partial class AskEndpoint

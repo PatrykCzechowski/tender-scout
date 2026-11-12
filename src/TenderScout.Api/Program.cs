@@ -1,3 +1,4 @@
+using Scalar.AspNetCore;
 using TenderScout.Api;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Embeddings;
@@ -9,6 +10,7 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
 builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi();
 builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
 
@@ -17,6 +19,18 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 app.MapDefaultEndpoints();
-app.MapPost("/ask", AskEndpoint.HandleAsync);
+app.MapOpenApi();
+if (app.Environment.IsDevelopment())
+{
+    app.MapScalarApiReference();
+}
+
+// The handler returns IResult, so the responses are declared here for the OpenAPI document.
+app.MapPost("/ask", AskEndpoint.HandleAsync)
+    .WithSummary("Answers a question from the stored tender documents.")
+    .WithDescription("200 holds an answer with its citations, or a refusal with refused set to true and no citations.")
+    .Produces<AskResponse>()
+    .ProducesValidationProblem()
+    .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 app.Run();

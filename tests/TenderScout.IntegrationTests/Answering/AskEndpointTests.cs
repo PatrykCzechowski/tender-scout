@@ -238,6 +238,34 @@ public sealed class AskEndpointTests(PostgresFixture database)
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/alive", Ct)).StatusCode);
     }
 
+    [Fact]
+    public async Task OpenApiDocument_DescribesAskWithItsRequestBodyAndResponses()
+    {
+        await using var api = new WebApplicationFactory<Program>().WithWebHostBuilder(web => Configure(web, database.ConnectionString));
+        using var client = api.CreateClient();
+
+        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", Ct);
+
+        var ask = document.GetProperty("paths").GetProperty("/ask").GetProperty("post");
+        Assert.True(ask.TryGetProperty("requestBody", out _));
+        Assert.Equal(["200", "400", "503"], ask.GetProperty("responses").EnumerateObject().Select(r => r.Name));
+    }
+
+    [Theory]
+    [InlineData("Development", HttpStatusCode.OK)]
+    [InlineData("Production", HttpStatusCode.NotFound)]
+    public async Task ApiReference_IsServedOnlyInDevelopment(string environment, HttpStatusCode expected)
+    {
+        await using var api = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
+        {
+            Configure(web, database.ConnectionString);
+            web.UseEnvironment(environment);
+        });
+        using var client = api.CreateClient();
+
+        Assert.Equal(expected, (await client.GetAsync("/scalar/", Ct)).StatusCode);
+    }
+
     private static void AssertRefusal(AskResponse answer)
     {
         Assert.True(answer.Refused);
