@@ -14,7 +14,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\TenderScout.Api\TenderScout.Api.csproj" />
+    <ProjectReference Include="..\..\src\TenderScout.Evaluation\TenderScout.Evaluation.csproj" />
     <ProjectReference Include="..\..\src\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Evaluation\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />

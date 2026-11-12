@@ -27,12 +27,18 @@ public sealed partial class QuestionAnswerer(
     internal const int PassageCount = 5;
 
     /// <summary>
-    /// Lowest cosine similarity of the nearest chunk that lets a question reach the model. Provisional: measured
-    /// 0.53-0.55 for relevant passages and 0.23-0.29 for unrelated ones; day4-03 calibrates it.
+    /// Lowest cosine similarity of the nearest chunk that lets a question reach the model. Provisional: the first
+    /// golden-set run could not calibrate it, because the number exception applied to every question (ADR-0004).
     /// </summary>
     internal const double MinSimilarity = 0.45;
 
     internal const int ContextTokens = 8192;
+
+    /// <summary>
+    /// An answer with its citation numbers takes a few hundred tokens. Without a limit the model once kept writing for
+    /// minutes inside the JSON; a cut-off reply is not valid JSON, so it ends as a refusal.
+    /// </summary>
+    internal const int MaxAnswerTokens = 512;
 
     internal const string AnswerSchema = """
         {"type":"object","properties":{"answer":{"type":"string"},"citations":{"type":"array","items":{"type":"integer"}}},"required":["answer","citations"]}
@@ -90,12 +96,13 @@ public sealed partial class QuestionAnswerer(
     internal static ChatOptions CreateChatOptions() => new()
     {
         Temperature = 0,
+        MaxOutputTokens = MaxAnswerTokens,
         ResponseFormat = ChatResponseFormat.ForJsonSchema(JsonDocument.Parse(AnswerSchema).RootElement, "answer"),
         AdditionalProperties = new() { ["num_ctx"] = ContextTokens },
     };
 
     /// <summary>A question with a code or amount may be answerable even when its vector is far from every chunk.</summary>
-    private static bool ContainsNumberFrom(string question, IReadOnlyList<ChunkSearchResult> passages)
+    internal static bool ContainsNumberFrom(string question, IReadOnlyList<ChunkSearchResult> passages)
     {
         var numbers = ChunkEmbeddingRepository.NumberWords(question).ToList();
         return passages.Any(p => numbers.Any(n => p.Text.Contains(n, StringComparison.OrdinalIgnoreCase)));

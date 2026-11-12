@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <UserSecretsId>tender-scout-evaluation</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
+    <ProjectReference Include="..\TenderScout.ServiceDefaults\TenderScout.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>
