@@ -51,7 +51,7 @@ public sealed partial class ChunkEmbedder(
         return new ChunkEmbeddingReport(embedded, batches);
     }
 
-    private static List<ChunkEmbedding> Validate(IReadOnlyList<ChunkToEmbed> batch, IList<Embedding<float>> generated, string where)
+    private static List<ChunkEmbedding> Validate(IReadOnlyList<ChunkToEmbed> batch, GeneratedEmbeddings<Embedding<float>> generated, string where)
     {
         if (generated.Count != batch.Count)
         {

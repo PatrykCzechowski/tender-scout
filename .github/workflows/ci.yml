@@ -56,3 +56,6 @@ jobs:
 
       - name: Verify formatting
         run: dotnet format TenderScout.slnx --verify-no-changes --no-restore --verbosity diagnostic
+
+      - name: Verify analyzer suggestions
+        run: dotnet format analyzers TenderScout.slnx --severity info --verify-no-changes --no-restore
