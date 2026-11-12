@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-11-08, amended 2026-11-09 for the document pipeline (#18)
+Accepted — 2026-11-08, amended 2026-11-09 for the document pipeline (#18) and 2026-11-10 for hybrid search
 
 ## Context
 
@@ -75,6 +75,36 @@ keep consistent, for a few thousand rows.
   to load first. This client allows `Embedding:RequestTimeout` (2 minutes) per
   attempt, and 10 s to connect, so a switched-off PC still fails within seconds.
 
+### Hybrid search
+
+Vectors find passages by meaning but miss exact strings such as CPV codes, amounts and
+article numbers. `HybridSearchAsync` therefore combines them with PostgreSQL full-text
+search, and `DocumentSearch` uses it. `SearchAsync` stays as the vector-only search.
+
+- **`simple` text search configuration.** The `pgvector/pgvector:pg17` image has no
+  `polish` configuration, no Polish stemmer and no Hunspell dictionary. Installing one
+  would mean a custom image to maintain on the Mac, in CI and on Azure. `simple` only
+  lowercases and keeps diacritics, so inflected forms do not match (`wysokość` does
+  not find `wysokości`); the vector side covers those. `unaccent` is not used: it
+  cannot run in a generated column, and PdfPig keeps the diacritics.
+- **`document_chunks.search_vector`** is a stored generated `tsvector` column with a
+  GIN index. PostgreSQL fills it for existing rows and keeps it in sync with `text`,
+  so no code writes it.
+- **The question becomes an OR of its content words.** Words of letters and digits are
+  kept, those shorter than 3 characters and about 25 Polish question and function words
+  are dropped, and the rest are joined with `or` for `websearch_to_tsquery`. An AND of
+  every word rarely matches a natural question, and PostgreSQL ranking ignores how
+  rare a word is, so `jest` would count as much as `wadium`. Only letters and digits
+  survive, so a minus sign or a quote cannot act as an operator. Text candidates come
+  from all chunks, also those without a vector. Chunks containing a word with a digit
+  from the question come first, then `ts_rank_cd` decides: on the real documents a CPV
+  code found in one tender otherwise lost to the word "CPV", which appears in almost
+  every tender.
+- **Reciprocal Rank Fusion** merges the two rankings: each chunk scores the sum of
+  1 / (60 + rank) over the rankings it appears in, ties go by chunk id. Each side
+  gives 40 candidates, because an HNSW scan returns at most 40 (`hnsw.ef_search`), and
+  N is between 1 and 20. All of these are constants.
+
 ## Consequences
 
 ### Easier
@@ -102,6 +132,8 @@ keep consistent, for a few thousand rows.
   a sequential scan, which takes milliseconds. The index starts to matter as the
   corpus grows. Search also applies the model filter after the index scan, so while
   two models are mixed in the table it can return fewer than N rows.
+- **The stopword list and the RRF constant are not tuned.** They are reasonable
+  defaults; the golden set will show whether hybrid search beats either side alone.
 - **The fake generator proves the plumbing, not the meaning.** Retrieval quality is
   measured separately, on a golden set.
 - **Ollama has no login.** The port must stay inside the local network.

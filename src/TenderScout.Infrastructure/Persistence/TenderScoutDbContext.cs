@@ -91,5 +91,12 @@ public sealed class TenderScoutDbContext(DbContextOptions<TenderScoutDbContext> 
             .HasMethod("hnsw")
             .HasOperators("vector_cosine_ops")
             .HasDatabaseName("ix_document_chunks_embedding_hnsw");
+
+        // The image has no Polish text search configuration, so words are only lowercased (ADR-0003).
+        chunk.HasGeneratedTsVectorColumn(c => c.SearchVector, ChunkEmbeddingRepository.TextSearchConfiguration, c => new { c.Text })
+            .HasIndex(c => c.SearchVector)
+            .HasMethod("GIN")
+            .HasDatabaseName("ix_document_chunks_search_vector");
+        chunk.Property(c => c.SearchVector).HasColumnName("search_vector");
     }
 }

@@ -1,3 +1,4 @@
+using NpgsqlTypes;
 using Pgvector;
 
 namespace TenderScout.Infrastructure.Persistence;
@@ -22,4 +23,7 @@ public sealed class DocumentChunkEntity
 
     /// <summary>The model that produced <see cref="Embedding"/>.</summary>
     public string? EmbeddingModel { get; set; }
+
+    /// <summary>Full-text form of <see cref="Text"/>, computed by the database.</summary>
+    public NpgsqlTsVector SearchVector { get; private set; } = null!;
 }

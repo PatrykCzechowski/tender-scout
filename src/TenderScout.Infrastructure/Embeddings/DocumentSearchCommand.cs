@@ -7,7 +7,7 @@ using TenderScout.Infrastructure.Persistence;
 namespace TenderScout.Infrastructure.Embeddings;
 
 /// <summary>
-/// Development command: embeds a question with the configured model and prints the nearest passages.
+/// Development command: embeds a question with the configured model and prints the best passages from hybrid search.
 /// </summary>
 public sealed class DocumentSearchCommand(
     IEmbeddingGenerator<string, Embedding<float>> generator,
@@ -50,7 +50,7 @@ public sealed class DocumentSearchCommand(
         for (var i = 0; i < results.Count; i++)
         {
             var result = results[i];
-            var heading = string.Create(CultureInfo.InvariantCulture, $"{i + 1}. score {result.Score:F3} | {result.DocId} | page {result.PageNumber}");
+            var heading = string.Create(CultureInfo.InvariantCulture, $"{i + 1}. score {result.Score:F4} | {result.DocId} | page {result.PageNumber}");
             await output.WriteLineAsync(heading).ConfigureAwait(false);
             await output.WriteLineAsync(result.Text).ConfigureAwait(false);
             await output.WriteLineAsync().ConfigureAwait(false);
@@ -63,6 +63,6 @@ public sealed class DocumentSearchCommand(
     {
         var settings = options.Value;
         var vector = await generator.GenerateVectorAsync(query, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return await repository.SearchAsync(vector, settings.Model, ResultCount, cancellationToken).ConfigureAwait(false);
+        return await repository.HybridSearchAsync(query, vector, settings.Model, ResultCount, cancellationToken).ConfigureAwait(false);
     }
 }

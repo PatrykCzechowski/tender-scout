@@ -73,7 +73,9 @@ is published again, and only what is missing is processed. The old messages in t
 ### Searching
 
 `TenderScout.DocumentSearch` is a development command that embeds a question with the same model and prints the
-five nearest passages, with document, page and score. It runs outside the AppHost, so give it the database
+five best passages, with document, page and score. It combines vector search with full-text search, so it finds
+both passages that match by meaning and exact strings such as CPV codes; the score is the fused rank, higher is
+better. It runs outside the AppHost, so give it the database
 connection string shown for the `tenderscout` resource in the dashboard, and the Ollama address:
 
 ```sh
