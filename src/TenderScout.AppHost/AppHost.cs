@@ -19,9 +19,7 @@ var migrations = builder.AddProject<Projects.TenderScout_MigrationService>("migr
 
 builder.AddProject<Projects.TenderScout_Api>("api")
     .WithReference(database)
-    .WithReference(rabbitmq)
     .WaitFor(database)
-    .WaitFor(rabbitmq)
     .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 

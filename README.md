@@ -86,6 +86,44 @@ dotnet run --project src/TenderScout.DocumentSearch -- "Jaka jest wysokość wad
 
 It exits with a non-zero code when the question is missing or Ollama cannot be reached.
 
+### Asking questions
+
+`POST /ask` answers a question from the stored documents, with the document and page of every passage the answer is
+based on. It embeds the question with `bge-m3`, takes the five best passages from hybrid search and lets the chat
+model answer only from them. When no passage is close enough, or the model cites none, it refuses. The prompt and
+the refusal rule are in [ADR-0004](docs/adr/0004-answers-bielik-citations-refusal.md). The endpoint has no
+authentication yet; keep it on the development machine.
+
+The API needs both models on Ollama, which may run on different machines:
+
+```sh
+ollama pull SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0
+dotnet user-secrets --project src/TenderScout.Api set "Embedding:Endpoint" "http://<ollama-host>:11434"
+dotnet user-secrets --project src/TenderScout.Api set "Chat:Endpoint" "http://<ollama-host>:11434"
+```
+
+Start the AppHost and use the address of the `api` resource from the dashboard. `publicationNumber` is optional and
+limits the search to one tender:
+
+```sh
+curl -X POST http://<api-host>/ask -H "Content-Type: application/json" \
+  -d '{"question": "Jaka jest wysokość wadium?", "publicationNumber": "123456-2026"}'
+```
+
+```json
+{
+  "refused": false,
+  "answer": "Wadium wynosi 10 000 zł.",
+  "citations": [
+    { "docId": "swz-001", "publicationNumber": "123456-2026", "page": 13, "passage": "<stored passage text>" }
+  ]
+}
+```
+
+A refusal is also 200, with `"refused": true`, the answer `Nie znalazłem odpowiedzi w dokumentach.` and no
+citations. Invalid input gives 400 with problem details naming the field; an unreachable model gives 503. The API
+starts with Ollama off. An answer takes several seconds; the example above is invented.
+
 ### Settings
 
 | Key | Default | Used by | Meaning |
@@ -95,10 +133,13 @@ It exits with a non-zero code when the question is missing or Ollama cannot be r
 | `DocumentImport:DocKinds` | `swz` | import | Manifest `doc_kind` values to import |
 | `DocumentChunking:ChunkSize` | `1200` | Worker | Maximum chunk length in characters |
 | `DocumentChunking:ChunkOverlap` | `150` | Worker | Text a chunk repeats from the previous one |
-| `Embedding:Endpoint` | `http://localhost:11434` in the Worker | Worker, search | Address of the Ollama server |
-| `Embedding:Model` | `bge-m3` | Worker, search | Model name, stored with every vector |
+| `Embedding:Endpoint` | `http://localhost:11434` in the Worker and API | Worker, search, API | Address of the Ollama server |
+| `Embedding:Model` | `bge-m3` | Worker, search, API | Model name, stored with every vector |
 | `Embedding:BatchSize` | `32` | Worker | Chunks per request; each batch is saved separately |
-| `Embedding:RequestTimeout` | `00:02:00` | Worker, search | Time limit of one attempt |
+| `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API | Time limit of one attempt |
+| `Chat:Endpoint` | `http://localhost:11434` | API | Address of the Ollama server with the chat model |
+| `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API | Chat model that writes the answers |
+| `Chat:RequestTimeout` | `00:01:30` | API | Time limit of the single attempt at an answer |
 
 ### Local result
 

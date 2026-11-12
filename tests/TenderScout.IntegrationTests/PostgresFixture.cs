@@ -45,7 +45,10 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>
     /// Creates a database only the calling test sees, migrated up to <paramref name="targetMigration"/> or fully.
     /// </summary>
-    /// <returns>Its connection string.</returns>
+    /// <returns>
+    /// Its connection string, without pooling: otherwise every test database keeps its own idle pool open,
+    /// and together they use up PostgreSQL's 100 connections.
+    /// </returns>
     public async Task<string> CreateIsolatedDatabaseAsync(string? targetMigration = null)
     {
         var name = $"test_{Guid.NewGuid():N}";
@@ -57,7 +60,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             await command.ExecuteNonQueryAsync();
         }
 
-        var connectionString = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ConnectionString;
+        var connectionString = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name, Pooling = false }.ConnectionString;
         await using var dbContext = CreateDbContext(connectionString);
         await dbContext.GetService<IMigrator>().MigrateAsync(targetMigration);
         return connectionString;
