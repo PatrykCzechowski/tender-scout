@@ -16,6 +16,7 @@
     <ProjectReference Include="..\TenderScout.Domain\TenderScout.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="TenderScout.Evaluation" />
     <InternalsVisibleTo Include="TenderScout.IntegrationTests" />
     <InternalsVisibleTo Include="TenderScout.UnitTests" />
   </ItemGroup>

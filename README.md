@@ -124,6 +124,72 @@ A refusal is also 200, with `"refused": true`, the answer `Nie znalazłem odpowi
 citations. Invalid input gives 400 with problem details naming the field; an unreachable model gives 503. The API
 starts with Ollama off. An answer takes several seconds; the example above is invented.
 
+### Evaluation
+
+`dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions
+about the indexed documents and writes `artifacts/eval/<UTC time>.json`; `--retrieval-only` skips the chat models.
+The golden set format, the metric definitions and the CI gate are described in [evals/README.md](evals/README.md).
+
+Run on 2026-11-10: 27 documents, 3512 chunks, embeddings `bge-m3`, answers
+`SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0`, judge `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M`. Golden set: 40
+questions (32 answerable, 12 of them paraphrased; 8 without an answer), labels: 40 auto, 0 verified. Every question
+names its tender, and search and `/ask` were limited to it.
+
+The run used the search and answering code as in commit `8c914b2`, where the refusal threshold was 0.55. The results
+file records the commit the command was built from, which cannot show whether the working tree was unchanged, so
+treat these numbers as a first measurement. They will be re-run from a clean checkout once the labels are verified.
+
+| Search | All (32) recall@5 | All MRR@10 | Paraphrased (12) recall@5 | Literal (20) recall@5 |
+| --- | ---: | ---: | ---: | ---: |
+| Vector | 0.50 | 0.32 | 0.42 | 0.55 |
+| Full-text | 0.41 | 0.13 | 0.00 | 0.65 |
+| Hybrid | 0.53 | 0.28 | 0.00 | 0.85 |
+
+| Answers | Value |
+| --- | ---: |
+| Citation hit rate | 0.46 of 26 answered |
+| Citation precision | 0.33 of 36 citations |
+| Faithfulness (judge, 0 invalid replies) | 0.73 of 30 answered |
+| Correct refusals | 0.50 of 8 |
+| False refusals | 0.19 of 32 |
+
+Share of questions whose nearest chunk is below each threshold, by similarity alone (provisional):
+
+| Threshold | False refusals (of 32) | Correct refusals (of 8) |
+| ---: | ---: | ---: |
+| 0.30-0.45 | 0.00 | 0.00 |
+| 0.50 | 0.00 | 0.12 |
+| 0.55 | 0.00 | 0.25 |
+| 0.60 | 0.28 | 0.75 |
+
+- **The refusal threshold stays 0.45.** By this table 0.55 is the highest threshold with at most 10% false refusals,
+  but the run could not confirm it: the number exception applied to all 40 questions, so no threshold refused
+  anything, and the answer metrics above do not depend on it. The lowest answerable question scored 0.56, which
+  leaves 0.55 almost no margin. The answerable questions' nearest chunks scored 0.56-0.74, those without an answer
+  0.49-0.62, so similarity alone separates them poorly. The threshold will be calibrated after the number exception
+  is narrowed and the labels are verified.
+- **Hybrid search loses the 5 paraphrased questions** that vector search finds: full-text finds none of their
+  answers, and fusion ranks chunks found by both searches above an answer found by one. It wins on literal questions
+  (0.85 against 0.55).
+- **Ranking passages with a number from the question first hurts here.** Every question contains its publication
+  number, which ends in the year, so the rule promotes any passage with the year. Without it full-text gets recall@5
+  0.53 and MRR@10 0.38, hybrid 0.56 and 0.35.
+- **The number exception to the early refusal applied to all 40 questions** for the same reason, so the threshold
+  never ran.
+- Without the tender filter recall@5 is 0.22 (vector), 0.03 (full-text) and 0.12 (hybrid).
+- Of the 10 refusals by the model, 9 had no citation and 1 cited a page number instead of a passage number.
+- The judge is from the same family as the answering model.
+
+CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
+that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
+fusion and the stop-word list:
+
+| Search | Recall@5 | Threshold | MRR@10 | Threshold |
+| --- | ---: | ---: | ---: | ---: |
+| Vector | 0.95 | 0.90 | 0.57 | 0.50 |
+| Full-text | 0.60 | 0.55 | 0.43 | 0.35 |
+| Hybrid | 0.95 | 0.90 | 0.53 | 0.45 |
+
 ### Settings
 
 | Key | Default | Used by | Meaning |
@@ -133,13 +199,15 @@ starts with Ollama off. An answer takes several seconds; the example above is in
 | `DocumentImport:DocKinds` | `swz` | import | Manifest `doc_kind` values to import |
 | `DocumentChunking:ChunkSize` | `1200` | Worker | Maximum chunk length in characters |
 | `DocumentChunking:ChunkOverlap` | `150` | Worker | Text a chunk repeats from the previous one |
-| `Embedding:Endpoint` | `http://localhost:11434` in the Worker and API | Worker, search, API | Address of the Ollama server |
+| `Embedding:Endpoint` | `http://localhost:11434` in the Worker and API | Worker, search, API, evaluation | Address of the Ollama server |
 | `Embedding:Model` | `bge-m3` | Worker, search, API | Model name, stored with every vector |
 | `Embedding:BatchSize` | `32` | Worker | Chunks per request; each batch is saved separately |
 | `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API | Time limit of one attempt |
-| `Chat:Endpoint` | `http://localhost:11434` | API | Address of the Ollama server with the chat model |
-| `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API | Chat model that writes the answers |
-| `Chat:RequestTimeout` | `00:01:30` | API | Time limit of the single attempt at an answer |
+| `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model |
+| `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
+| `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of the single attempt at an answer |
+| `Evaluation:GoldenSetPath` | none, required | evaluation | The golden set JSONL file |
+| `Evaluation:JudgeModel` | `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | evaluation | Model that judges the answers |
 
 ### Local result
 

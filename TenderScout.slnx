@@ -6,6 +6,7 @@
     <Project Path="src/TenderScout.DocumentImport/TenderScout.DocumentImport.csproj" />
     <Project Path="src/TenderScout.DocumentSearch/TenderScout.DocumentSearch.csproj" />
     <Project Path="src/TenderScout.Domain/TenderScout.Domain.csproj" />
+    <Project Path="src/TenderScout.Evaluation/TenderScout.Evaluation.csproj" />
     <Project Path="src/TenderScout.Infrastructure/TenderScout.Infrastructure.csproj" />
     <Project Path="src/TenderScout.MigrationService/TenderScout.MigrationService.csproj" />
     <Project Path="src/TenderScout.ServiceDefaults/TenderScout.ServiceDefaults.csproj" />

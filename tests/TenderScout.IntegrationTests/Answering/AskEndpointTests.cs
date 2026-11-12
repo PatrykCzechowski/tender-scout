@@ -70,6 +70,7 @@ public sealed class AskEndpointTests(PostgresFixture database)
         Assert.Equal(2, messages.Count);
 
         Assert.Equal(0, options!.Temperature);
+        Assert.Equal(512, options.MaxOutputTokens);
         Assert.Equal(8192, options.AdditionalProperties!["num_ctx"]);
         var format = Assert.IsType<ChatResponseFormatJson>(options.ResponseFormat);
         Assert.Equal(JsonValueKind.Object, format.Schema!.Value.GetProperty("properties").GetProperty("citations").ValueKind);

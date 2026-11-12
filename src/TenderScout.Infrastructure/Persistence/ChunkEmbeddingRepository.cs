@@ -193,7 +193,7 @@ public sealed class ChunkEmbeddingRepository(TenderScoutDbContext dbContext)
     /// number from the question come first: PostgreSQL ranking ignores how rare a word is, so a code would otherwise
     /// lose to a common word next to it, such as "CPV".
     /// </summary>
-    private async Task<List<long>> TextSearchAsync(string queryText, string? publicationNumber, CancellationToken cancellationToken)
+    internal async Task<List<long>> TextSearchAsync(string queryText, string? publicationNumber, CancellationToken cancellationToken)
     {
         if (ToTextQuery(queryText) is not { } textQuery)
         {

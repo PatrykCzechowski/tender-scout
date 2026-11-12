@@ -15,7 +15,7 @@ public sealed class OllamaChatRegistrationTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task Client_SendsModelSchemaTemperatureAndContextSize()
+    public async Task Client_SendsModelSchemaTemperatureContextSizeAndAnswerLimit()
     {
         var handler = new FakeOllamaChatHandler();
         await using var provider = Create(handler);
@@ -28,6 +28,7 @@ public sealed class OllamaChatRegistrationTests
         Assert.Equal("test-model", request.Body["model"]!.GetValue<string>());
         Assert.Equal(0, request.Body["options"]!["temperature"]!.GetValue<double>());
         Assert.Equal(8192, request.Body["options"]!["num_ctx"]!.GetValue<int>());
+        Assert.Equal(512, request.Body["options"]!["num_predict"]!.GetValue<int>());
         Assert.Equal(["answer", "citations"], request.Body["format"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()));
     }
 
