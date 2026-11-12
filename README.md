@@ -124,6 +124,9 @@ A refusal is also 200, with `"refused": true`, the answer `Nie znalazłem odpowi
 citations. Invalid input gives 400 with problem details naming the field; an unreachable model gives 503. The API
 starts with Ollama off. An answer takes several seconds; the example above is invented.
 
+The API describes its endpoints in an OpenAPI document at `/openapi/v1.json`. In the Development environment
+`/scalar` shows that document as a page where the endpoints can be tried.
+
 ### Evaluation
 
 `dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions
