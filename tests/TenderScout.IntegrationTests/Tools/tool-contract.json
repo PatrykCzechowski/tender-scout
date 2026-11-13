@@ -1,0 +1,74 @@
+[
+  {
+    "name": "search_notices",
+    "description": "Searches the stored public procurement notices (tender announcements) and returns them newest first, each with its publication number, title, buyer, main CPV code, publication date, submission deadline and link. Use it to find tenders by topic, buyer, CPV code or deadline; with no arguments it returns the newest notices. It does not read tender documents: use search_tender_documents for their content.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "Words that must all occur in the notice title or the buyer name. Write them in Polish, the language of the notices, for example \"serwery Kraków\". A word also matches inside a longer word, so a word stem finds its inflected forms. 1 to 200 characters.",
+          "type": ["string", "null"],
+          "default": null
+        },
+        "cpvPrefix": {
+          "description": "The first 2 to 8 digits of a CPV code, for example 72 for IT services or 72000000. It is compared with the main CPV code and with the other CPV codes of a notice.",
+          "type": ["string", "null"],
+          "default": null
+        },
+        "deadlineFrom": {
+          "description": "Earliest submission deadline, a date as yyyy-MM-dd, for example 2026-12-01. Notices without a deadline are left out.",
+          "type": ["string", "null"],
+          "default": null
+        },
+        "deadlineTo": {
+          "description": "Latest submission deadline, a date as yyyy-MM-dd, for example 2026-12-31. It must not be before deadlineFrom. Notices without a deadline are left out.",
+          "type": ["string", "null"],
+          "default": null
+        },
+        "limit": {
+          "description": "Maximum number of notices to return, 1 to 25.",
+          "type": "integer",
+          "default": 10
+        }
+      }
+    }
+  },
+  {
+    "name": "get_notice",
+    "description": "Returns one stored public procurement notice by its publication number: title, buyer, main CPV code and all CPV codes, publication date, submission deadline and link. Use it when the publication number is known, for example from search_notices. When no such notice is stored, found is false and message says so.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "publicationNumber": {
+          "description": "TED publication number of the notice: 1 to 6 digits, a hyphen and the 4-digit year, for example 123456-2026.",
+          "type": "string"
+        }
+      },
+      "required": ["publicationNumber"]
+    }
+  },
+  {
+    "name": "search_tender_documents",
+    "description": "Searches the text of the stored tender documents, such as the specification of the terms of a tender (SWZ), and returns the best matching passages, each with the document id, the publication number of its tender, the page and the passage text. Use it for questions about the terms of a tender: the deposit, the award criteria, deadlines or conditions for participation. It returns passages, not an answer, and it returns the closest passages even when none of them answers the question.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "The question or search phrase. Write it in Polish, the language of the documents, for example \"Jaka jest wysokość wadium?\". 1 to 1000 characters.",
+          "type": "string"
+        },
+        "publicationNumber": {
+          "description": "Limits the search to the documents of one tender: its TED publication number, 1 to 6 digits, a hyphen and the 4-digit year, for example 123456-2026.",
+          "type": ["string", "null"],
+          "default": null
+        },
+        "limit": {
+          "description": "Maximum number of passages to return, 1 to 10.",
+          "type": "integer",
+          "default": 5
+        }
+      },
+      "required": ["query"]
+    }
+  }
+]

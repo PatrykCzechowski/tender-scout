@@ -16,9 +16,12 @@
     <ProjectReference Include="..\..\src\TenderScout.Api\TenderScout.Api.csproj" />
     <ProjectReference Include="..\..\src\TenderScout.Evaluation\TenderScout.Evaluation.csproj" />
     <ProjectReference Include="..\..\src\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
+    <!-- An alias, because the API and the MCP host both have a Program class. -->
+    <ProjectReference Include="..\..\src\TenderScout.Mcp\TenderScout.Mcp.csproj" Aliases="McpHost" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Evaluation\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Tools\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
