@@ -147,8 +147,11 @@ function answerContent(reply, n) {
 const isReply = r => r !== null && typeof r === 'object' && typeof r.refused === 'boolean'
   && typeof r.answer === 'string' && Array.isArray(r.citations);
 
+// A body that is not JSON gives null. A read that stops (the timer aborted it or the connection dropped) throws, so
+// ask() reports it as a timeout or a lost connection, not as a wrong reply.
 async function readJson(response) {
-  try { return await response.json(); } catch { return null; }
+  const body = await response.text();
+  try { return JSON.parse(body); } catch { return null; }
 }
 
 // Turns the HTTP response into what the log shows; marks the fields a 400 names.
