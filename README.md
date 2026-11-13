@@ -328,6 +328,12 @@ Share of questions whose nearest chunk is below each threshold, by similarity al
 - Of the 10 refusals by the model, 9 had no citation and 1 cited a page number instead of a passage number.
 - The judge is from the same family as the answering model.
 
+`dotnet run --project src/TenderScout.Evaluation -- --agent-cases` measures which tools the agent of `POST /agent`
+calls: 12 invented cases name the calls a question needs and their key arguments, each case is run 3 times against
+the model of `Agent:Model` on an empty database the command fills with invented notices and passages, and the tool
+calls are scored. Answers are not judged. The cases, the scoring rules and the results file
+`artifacts/eval/agent-<UTC time>.json` are described in [evals/README.md](evals/README.md#agent-tool-choices).
+
 CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
 that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
 fusion and the stop-word list:
@@ -354,7 +360,7 @@ fusion and the stop-word list:
 | `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model |
 | `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
 | `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of one request to the chat model |
-| `Agent:Model` | none; `/agent` answers 503 without it | API | Chat model of the agent; it must be able to call tools |
+| `Agent:Model` | none; `/agent` answers 503 without it | API, evaluation | Chat model of the agent; it must be able to call tools |
 | `Evaluation:GoldenSetPath` | none, required | evaluation | The golden set JSONL file |
 | `Evaluation:JudgeModel` | `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | evaluation | Model that judges the answers |
 

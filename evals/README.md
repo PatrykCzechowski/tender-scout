@@ -1,7 +1,9 @@
 # Evaluation
 
 `src/TenderScout.Evaluation` measures how well search finds the passage that answers a question, and how well
-`POST /ask` answers, cites and refuses. Results are in the main [README](../README.md#evaluation).
+`POST /ask` answers, cites and refuses. With `--agent-cases` it measures instead which tools the agent of
+`POST /agent` calls; see [Agent tool choices](#agent-tool-choices). Results are in the main
+[README](../README.md#evaluation).
 
 ## Golden set
 
@@ -114,6 +116,117 @@ dotnet run --project src/TenderScout.Evaluation -- --write-fixture
 ```
 
 Then run the gate, update the thresholds in `RetrievalGateTests` and the README, and commit both files.
+
+## Agent tool choices
+
+`dotnet run --project src/TenderScout.Evaluation -- --agent-cases` asks the agent of `POST /agent` a small set of
+questions and scores the tools it called. It does not judge the answers.
+
+### Cases
+
+Everything is invented and public, in `evals/agent`:
+
+- `cases.jsonl`: 12 cases. 3 need only notices, 3 need the documents of a tender given by its number, 4 need a notice
+  search and then a document search, 2 need no tool at all.
+- `notices.jsonl`: 10 invented notices. Five belong to the tenders of the synthetic passages of the
+  [CI gate](#ci-gate), which are the documents of this set; five have no documents.
+- `reference-date.json`: the date the agent is told is today, so "next week" means the same on every run.
+
+One JSON object per line:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Stable id |
+| `question` | The question in Polish, as a user would ask it |
+| `expectedCalls` | The calls the agent should make, in order: each has `tool` and `arguments`, the key arguments only. May be `[]` |
+| `allowedExtraCalls` | Tools the agent may also call without being marked down. May be `[]` |
+
+A key argument is written in one of three ways. An argument the case does not mention is not checked.
+
+| Written as | Matches when |
+| --- | --- |
+| A value: `"publicationNumber": "100202-2026"` | The call has that argument with the same value |
+| A list: `"cpvPrefix": ["72", "72000000"]` | The call's value equals one of them |
+| Words: `"query": {"words": ["wadium"]}` | The call's text contains every word, in any letter case, also inside a longer word |
+
+Values are compared without outer spaces and letter case, and a number equals the text that spells it (`5` and
+`"5"`). Nothing else is normalised. The file is checked when it is loaded: unique ids, known tools, only arguments
+the tool has. A broken file stops the command and names the case or the line.
+
+### Scoring one run
+
+The expected calls are taken in order. Each is looked for after the call that was taken for the one before it:
+
+1. The first later call to the expected tool that did not fail and has the key arguments: the expected call is
+   **chosen** and its **arguments matched**.
+2. Otherwise the first later call to the expected tool: **chosen**, arguments not matched.
+3. Otherwise **not chosen**; the search for the next expected call starts at the same place.
+
+A call that was not taken is an extra call. It is **unexpected** unless its tool is in `allowedExtraCalls`; a call to
+a tool that does not exist is always unexpected. A failed call never matches the arguments, so after a rejected call
+and a corrected one the corrected one is taken and the rejected one is an extra call.
+
+A case run **passes** when every expected call has matched arguments, no call is unexpected and gathering did not
+stop at a limit.
+
+### Numbers
+
+| Number | Definition |
+| --- | --- |
+| Expected tool chosen | Chosen expected calls over all expected calls, all runs together |
+| Arguments matched | Expected calls with matched arguments over all expected calls |
+| Cases passed | Passing case runs over all case runs |
+| Steps | Tool calls per case run: mean, least and most |
+| Any gathering limit | Case runs where the agent's `limitReached` is true. It covers three limits (round trips, tool calls, time) and does not say which |
+| Runs at the call cap, at most | Case runs with `limitReached` and exactly as many tool calls as the cap of 12 |
+| Unexpected calls | Their number, and how many were to tools that do not exist |
+| Failed calls | Calls the tool rejected, that failed, or to a tool that does not exist |
+| Errored case runs | Case runs that ended with an exception |
+
+- Every case is run 3 times, because the model's calls can differ between runs. The first three numbers are also
+  given per run, as the least and the most.
+- A share with nothing to divide by, such as the expected calls of a case that expects none, is shown as `n/a (0/0)`
+  and is `null` in the results file.
+- "Runs at the call cap, at most" is an upper bound: a run stopped by the cap has 12 calls, but a run with 12 calls
+  can also have stopped at the round limit. Zero means the cap did not get in the way on these cases, not that 12 is
+  enough in general. The cap is provisional.
+- An errored case run counts as not passed and is left out of every other number, because it has no tool calls.
+
+### Running
+
+The command needs an empty PostgreSQL database with pgvector of its own. It creates the schema and loads the notices
+and the passages. It refuses to start when the database already holds a notice or a document.
+
+```sh
+dotnet user-secrets --project src/TenderScout.Evaluation set "ConnectionStrings:tenderscout" "<connection string of the empty database>"
+dotnet user-secrets --project src/TenderScout.Evaluation set "Embedding:Endpoint" "http://<ollama-host>:11434"
+dotnet user-secrets --project src/TenderScout.Evaluation set "Chat:Endpoint" "http://<ollama-host>:11434"
+dotnet user-secrets --project src/TenderScout.Evaluation set "Agent:Model" "SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M"
+dotnet run --project src/TenderScout.Evaluation -- --agent-cases
+```
+
+It runs the same agent class as the API, in process, with the same tools, prompts, limits and model setting; only
+the date it is told is the reference date. `bge-m3` is needed too, for the vectors of the model's document queries.
+The command prints a table per case and an overall table and writes `artifacts/eval/agent-<UTC time>.json` with the
+date, commit, models, reference date, limits, the numbers and, per case run, the score and the tool calls: name,
+arguments and whether the call failed, plus `limitReached` and `refused`. It holds no answer, no passage and nothing
+else a tool returned, and it is enough to compute the scores again without a model.
+
+- A model that cannot be reached stops the command; the file then says `"complete": false` and no table is printed.
+- A case run that ends with another exception is recorded with the kind of the exception, the other runs are made,
+  and the command exits with an error. Only a complete run without such a case run is quoted in the README.
+
+### What the numbers do not show
+
+- Whether an answer is right, cites the right source or reads well.
+- Models in general: they measure one model with the prompt of the agent on 12 invented cases.
+- Meaning: the word matchers are stems (`kryteri`, `warun`), so a paraphrased query can be marked down, and a query
+  that contains the words can still be a poor one.
+- How the agent does on real notices and documents.
+
+The scoring is tested in `dotnet test` on hand-written tool calls, without a model: `AgentScoringTests`.
+`AgentCasesTests` checks the public cases against the notices, and `AgentEvaluationRunnerTests` runs the command
+with scripted model replies.
 
 ## Why not an evaluation framework
 
