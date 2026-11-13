@@ -334,6 +334,39 @@ the model of `Agent:Model` on an empty database the command fills with invented 
 calls are scored. Answers are not judged. The cases, the scoring rules and the results file
 `artifacts/eval/agent-<UTC time>.json` are described in [evals/README.md](evals/README.md#agent-tool-choices).
 
+Run on 2026-11-13 from commit `80c2249`: agent model `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M`, embeddings
+`bge-m3`, 12 cases, 3 runs each (36 case runs), reference date 2026-12-07. The run was complete and no case run
+ended with an error.
+
+| Number | All runs | Per run, least-most |
+| --- | ---: | ---: |
+| Expected tool chosen | 1.00 (42/42) | 1.00-1.00 |
+| Arguments matched | 0.50 (21/42) | 0.50-0.50 |
+| Cases passed | 0.58 (21/36) | 0.58-0.58 |
+| Steps per case run: mean, least, most | 1.17, 0, 2 | |
+| Any gathering limit (case runs) | 0 | |
+| Runs at the call cap of 12, at most | 0 | |
+| Unexpected calls (of them to tools that do not exist) | 0 (0) | |
+| Failed calls | 12 | |
+| Most tool calls in a run (cap 12) | 2 | |
+| Errored case runs | 0 | |
+
+The data are invented and small, and answers are not judged: the numbers measure this model with this prompt on 12
+cases, not models in general.
+
+- **The agent always called the expected tools and no other.** The cases that need the documents of a tender given
+  by its number passed in 9 of 9 runs, the cases that need no tool in 6 of 6, the cases that need only notices in 6
+  of 9.
+- **The four cases that need a notice search and then a document search failed in all 12 runs.** The model asked
+  for both calls in one reply, before it had the result of the first, and wrote a placeholder where the publication
+  number belongs. The tool rejected those 12 calls, and the model stopped instead of searching again. In two of the
+  four cases it also searched the notices by a CPV code where the question names the subject in words.
+- **"Next week" was one day too long** in the one case that asks for it, in all three runs.
+- **No run came near a limit:** at most 2 tool calls against the cap of 12. The cap did not get in the way on these
+  cases, but the runs that should have gone on stopped early, so this does not show that 12 is the right number.
+- The three runs of a case scored the same. Their calls differed only in the order of the arguments and in an
+  optional `limit`.
+
 CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
 that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
 fusion and the stop-word list:
