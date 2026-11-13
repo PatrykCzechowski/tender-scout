@@ -21,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Evaluation\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\evals\agent\*" Link="Evaluation\agent\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Tools\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
