@@ -38,6 +38,52 @@ public sealed class NoticeQueries(TenderScoutDbContext dbContext)
         int limit,
         CancellationToken cancellationToken = default)
     {
+        var rows = await Filter(text, cpvPrefix, deadlineFrom, deadlineTo)
+            .OrderByDescending(n => n.PublicationDate)
+            .ThenBy(n => n.PublicationNumber)
+            .Take(limit)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return [.. rows.Select(n => n.ToNotice())];
+    }
+
+    /// <summary>
+    /// Returns the notices that pass the filters of <see cref="SearchAsync"/> and, when given, the documents filter,
+    /// soonest submission deadline first; notices without a deadline come last, equal deadlines by publication number.
+    /// </summary>
+    /// <param name="hasDocuments">Only notices with (true) or without (false) a stored document of their tender.</param>
+    /// <param name="limit">Maximum number of notices in the list; <see cref="NoticeList.Total"/> counts all matches.</param>
+    public async Task<NoticeList> ListAsync(
+        string? text,
+        string? cpvPrefix,
+        DateOnly? deadlineFrom,
+        DateOnly? deadlineTo,
+        bool? hasDocuments,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        var notices = Filter(text, cpvPrefix, deadlineFrom, deadlineTo);
+        if (hasDocuments is bool wanted)
+        {
+            notices = notices.Where(n => dbContext.Documents.Any(d => d.PublicationNumber == n.PublicationNumber) == wanted);
+        }
+
+        var total = await notices.CountAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await notices
+            .OrderBy(n => n.SubmissionDeadline == null)
+            .ThenBy(n => n.SubmissionDeadline)
+            .ThenBy(n => n.PublicationNumber)
+            .Take(limit)
+            .Select(n => new { Entity = n, HasDocuments = dbContext.Documents.Any(d => d.PublicationNumber == n.PublicationNumber) })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new NoticeList(total, [.. rows.Select(row => ListedNotice.From(row.Entity.ToNotice(), row.HasDocuments))]);
+    }
+
+    private IQueryable<NoticeEntity> Filter(string? text, string? cpvPrefix, DateOnly? deadlineFrom, DateOnly? deadlineTo)
+    {
         var notices = dbContext.Notices.AsNoTracking();
 
         foreach (var word in (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
@@ -62,13 +108,25 @@ public sealed class NoticeQueries(TenderScoutDbContext dbContext)
             notices = notices.Where(n => n.SubmissionDeadline <= deadlineTo);
         }
 
-        var rows = await notices
-            .OrderByDescending(n => n.PublicationDate)
-            .ThenBy(n => n.PublicationNumber)
-            .Take(limit)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return [.. rows.Select(n => n.ToNotice())];
+        return notices;
     }
+}
+
+/// <summary>A page of notices: the first ones in order and how many match in total.</summary>
+public sealed record NoticeList(int Total, IReadOnlyList<ListedNotice> Notices);
+
+/// <summary>Every field of <see cref="Notice"/>, and whether a document of its tender is stored.</summary>
+public sealed record ListedNotice(
+    string PublicationNumber,
+    string? Title,
+    string? BuyerName,
+    string? MainCpvCode,
+    IReadOnlyList<string> CpvCodes,
+    DateOnly PublicationDate,
+    DateOnly? SubmissionDeadline,
+    Uri? Link,
+    bool HasDocuments)
+{
+    internal static ListedNotice From(Notice n, bool hasDocuments) =>
+        new(n.PublicationNumber, n.Title, n.BuyerName, n.MainCpvCode, n.CpvCodes, n.PublicationDate, n.SubmissionDeadline, n.Link, hasDocuments);
 }
