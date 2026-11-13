@@ -37,6 +37,10 @@
     <PackageVersion Include="OllamaSharp" Version="5.5.2" />
     <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
   </ItemGroup>
+  <ItemGroup Label="MCP">
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <PackageVersion Include="ModelContextProtocol.Core" Version="2.4.0" />
+  </ItemGroup>
   <ItemGroup Label="Persistence">
     <!-- Pinned above the minimum Npgsql requires so every project resolves the same EF Core patch. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
