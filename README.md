@@ -364,8 +364,8 @@ cases, not models in general.
 - **"Next week" was one day too long** in the one case that asks for it, in all three runs.
 - **No run came near a limit:** at most 2 tool calls against the cap of 12. The cap did not get in the way on these
   cases, but the runs that should have gone on stopped early, so this does not show that 12 is the right number.
-- The three runs of a case scored the same. Their calls differed only in the order of the arguments and in an
-  optional `limit`.
+- The three runs of a case scored the same. Their calls were not identical: the order of the arguments, the value
+  of the optional `limit` and the wording of the placeholder differed between runs. None of this changed a score.
 
 CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
 that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
