@@ -127,6 +127,18 @@ starts with Ollama off. An answer takes several seconds; the example above is in
 The API describes its endpoints in an OpenAPI document at `/openapi/v1.json`. In the Development environment
 `/scalar` shows that document as a page where the endpoints can be tried.
 
+### Web page
+
+The API also serves a page for asking questions at its root: `http://localhost:5150/` when the API runs alone with
+`dotnet run --project src/TenderScout.Api`, or the address of the `api` resource in the AppHost dashboard. The page
+sends each question to `POST /ask`, optionally limited to one tender by its publication number, and shows the answer
+with its sources (document, tender, page and the passage), a refusal, or what went wrong. Each question is answered on
+its own and nothing is saved. Like `/ask`, the page needs both models, and it has no sign-in yet, so keep it on the
+development machine. It is plain HTML, CSS and JavaScript in `src/TenderScout.Api/wwwroot`, with no build step.
+
+The fonts Geist, Geist Mono and Newsreader are stored with the page under the SIL Open Font License 1.1; their licence
+texts and sources are in `src/TenderScout.Api/wwwroot/fonts`. The icons are part of this project.
+
 ### Evaluation
 
 `dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions

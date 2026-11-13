@@ -18,6 +18,10 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
+// The ask page: index.html and its files from wwwroot, served at "/". Unknown paths stay 404.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapDefaultEndpoints();
 app.MapOpenApi();
 if (app.Environment.IsDevelopment())

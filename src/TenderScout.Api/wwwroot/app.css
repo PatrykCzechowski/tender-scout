@@ -1,0 +1,33 @@
+/* Stage 1 additions. design.css is the design's stylesheet, kept whole and unchanged; this file holds only what the
+   ask page adds to it: the self-hosted fonts and a few rules the design has no class for. */
+
+@font-face { font-family: 'Geist'; src: url('fonts/Geist-Variable.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Geist Mono'; src: url('fonts/GeistMono-Variable.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Newsreader'; src: url('fonts/Newsreader16pt-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+
+/* Hidden stays hidden, also for elements the design gives a display value (the design's host page had this rule). */
+[hidden] { display: none !important; }
+
+/* Publication number: an input inside the design's dashed context pill. */
+.ctx-field { cursor: text; background: var(--surface); }
+.ctx-field span { white-space: nowrap; }
+@media (max-width: 480px) { .ctx-field .opt { display: none; } }
+.ctx-field input { flex: none; width: 12ch; height: 26px; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-family: var(--font-mono); }
+.ctx-field input::placeholder { color: var(--ink-3); }
+.ctx-field:focus-within { border-style: solid; border-color: var(--blue); color: var(--ink); }
+.ctx-field:has(input[aria-invalid="true"]) { border-style: solid; border-color: var(--red); }
+
+/* Field messages under the two fields. */
+.field-msg { margin: 6px 0 0 12px; color: var(--red-ink); font-size: 12.5px; font-weight: 500; }
+.ask-msg { max-width: 1040px; margin-inline: auto; padding-left: 20px; }
+.ask:has(input[aria-invalid="true"]) { border-color: var(--red); }
+
+/* Text from the API keeps its line breaks and wraps long words. */
+.ai-text, .quote blockquote { white-space: pre-line; overflow-wrap: anywhere; }
+.term-v { overflow-wrap: anywhere; }
+
+/* Waiting: elapsed seconds next to the design's pulse. */
+.toolchip .secs { font-variant-numeric: tabular-nums; }
+.send:disabled { cursor: wait; }
+
+.nojs { margin-top: 12px; color: var(--red-ink); font-weight: 500; }
