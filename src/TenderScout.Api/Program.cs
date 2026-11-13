@@ -1,5 +1,6 @@
 using Scalar.AspNetCore;
 using TenderScout.Api;
+using TenderScout.Infrastructure.Agent;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
+builder.Services.AddTenderAgent();
 
 var app = builder.Build();
 
@@ -34,6 +36,13 @@ app.MapPost("/ask", AskEndpoint.HandleAsync)
     .WithSummary("Answers a question from the stored tender documents.")
     .WithDescription("200 holds an answer with its citations, or a refusal with refused set to true and no citations.")
     .Produces<AskResponse>()
+    .ProducesValidationProblem()
+    .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+app.MapPost("/agent", AgentEndpoint.HandleAsync)
+    .WithSummary("Answers a question that needs several searches, with a model that calls the notice and document tools.")
+    .WithDescription("200 holds an answer with the notices and passages it rests on, or a refusal, and the tool calls that were made. limitReached is true when the search stopped at a limit.")
+    .Produces<AgentResponse>()
     .ProducesValidationProblem()
     .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 

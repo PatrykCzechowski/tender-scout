@@ -91,7 +91,10 @@ public sealed partial class AskPageTests(PostgresFixture database)
 
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", Ct);
 
-        Assert.Equal(["/ask"], document.GetProperty("paths").EnumerateObject().Select(p => p.Name));
+        var paths = document.GetProperty("paths").EnumerateObject().Select(p => p.Name).ToList();
+        Assert.Contains("/ask", paths);
+        Assert.DoesNotContain("/", paths);
+        Assert.DoesNotContain(paths, path => path.Contains('.', StringComparison.Ordinal));
     }
 
     private WebApplicationFactory<Program> CreateApi(string environment) =>

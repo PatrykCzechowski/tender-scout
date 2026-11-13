@@ -121,7 +121,7 @@ public sealed partial class QuestionAnswerer(
         return [new(ChatRole.System, SystemPrompt), new(ChatRole.User, prompt.ToString())];
     }
 
-    private static ModelReply? Parse(string text)
+    internal static ModelReply? Parse(string text)
     {
         try
         {
@@ -139,5 +139,5 @@ public sealed partial class QuestionAnswerer(
     [LoggerMessage(Level = LogLevel.Warning, Message = "The chat model gave no valid JSON answer with a valid citation; refusing. Reply: {Reply}")]
     private static partial void LogUnusableReply(ILogger logger, string reply);
 
-    private sealed record ModelReply(string? Answer, int[]? Citations);
+    internal sealed record ModelReply(string? Answer, int[]? Citations);
 }
