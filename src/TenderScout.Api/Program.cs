@@ -13,12 +13,13 @@ builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
+builder.Services.AddScoped<NoticeQueries>();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 
-// The ask page: index.html and its files from wwwroot, served at "/". Unknown paths stay 404.
+// The web page: index.html and its files from wwwroot, served at "/". Unknown paths stay 404.
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -36,5 +37,13 @@ app.MapPost("/ask", AskEndpoint.HandleAsync)
     .Produces<AskResponse>()
     .ProducesValidationProblem()
     .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+app.MapGet("/notices", NoticesEndpoint.HandleAsync)
+    .WithSummary("Lists stored notices, soonest submission deadline first.")
+    .WithDescription(
+        "The filters are those of the search_notices tool, plus hasDocuments. limit is 50 when not given and at most " +
+        "200; total counts every matching notice, whatever the limit. Notices without a deadline come last.")
+    .Produces<NoticeList>()
+    .ProducesValidationProblem();
 
 app.Run();

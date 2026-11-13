@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>tender/scout · Asystent</title>
+<title>tender/scout</title>
 <link rel="stylesheet" href="design.css">
 <link rel="stylesheet" href="app.css">
 <script src="app.js" defer></script>
 </head>
 <body>
 <div class="shell">
-<div class="app" id="app" data-page="chat" data-collapsed="false">
+<div class="app" id="app" data-page="dash" data-mobile="list" data-collapsed="false">
   <aside class="side" aria-label="Nawigacja">
     <div class="side-top">
       <div class="brand hide-c">tender<i>/</i>scout</div>
@@ -19,15 +19,57 @@
       </button>
     </div>
     <nav class="nav" id="nav" aria-label="Ekrany">
-      <button type="button" class="nav-item" id="navAsk" aria-current="page" title="Asystent">
-        <span class="lbl">Asystent</span>
-        <svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l1.4 3.9 3.9 1.4-3.9 1.4L8 12.4 6.6 8.5 2.7 7.1l3.9-1.4L8 1.8z"/><path d="M12.8 11.2v2.6M11.5 12.5h2.6"/></svg>
-      </button>
+      <a class="nav-item" href="#pulpit" data-view="pulpit" title="Pulpit"><span class="lbl">Pulpit</span><svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.2L8 2.5l5.5 4.7V13a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8V7.2z"/><path d="M6.3 13.8V9.5h3.4v4.3"/></svg></a>
+      <a class="nav-item" href="#skrzynka" data-view="skrzynka" title="Skrzynka"><span class="lbl">Skrzynka</span><svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5l1.6-5a1 1 0 0 1 .95-.7h6.9a1 1 0 0 1 .95.7l1.6 5V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5z"/><path d="M2 9.5h3.2a1 1 0 0 1 1 1 1.8 1.8 0 0 0 3.6 0 1 1 0 0 1 1-1H14"/></svg></a>
+      <a class="nav-item" href="#asystent" data-view="asystent" title="Asystent"><span class="lbl">Asystent</span><svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l1.4 3.9 3.9 1.4-3.9 1.4L8 12.4 6.6 8.5 2.7 7.1l3.9-1.4L8 1.8z"/><path d="M12.8 11.2v2.6M11.5 12.5h2.6"/></svg></a>
     </nav>
   </aside>
 
   <main class="main">
-    <section class="page chat" aria-labelledby="h-chat">
+    <section class="page dash" id="view-pulpit" aria-labelledby="h-dash">
+      <div class="hello">
+        <h1 id="h-dash"><span class="hl">Dzień dobry!</span></h1>
+        <p>O co chcesz dziś zapytać w dokumentach?</p>
+      </div>
+      <noscript><p class="nojs">Ta strona potrzebuje JavaScriptu. Włącz go w przeglądarce i odśwież stronę.</p></noscript>
+      <div class="grid sugrow" id="dashExamples"></div>
+      <div class="grid">
+        <article class="card s7" aria-labelledby="h-cal">
+          <div class="card-h"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3.3" width="11" height="10" rx="1.8"/><path d="M2.5 6.5h11M5.5 2v2.6M10.5 2v2.6"/></svg><h2 id="h-cal">Terminy ofert</h2></div>
+          <div id="calendar" aria-live="polite"></div>
+        </article>
+        <article class="card s5" aria-labelledby="h-counts">
+          <div class="card-h"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3h11L9.3 8.2v4.5l-2.6-1.3V8.2L2.5 3z"/></svg><h2 id="h-counts">Co mamy w bazie</h2></div>
+          <div id="counts" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="page" id="view-skrzynka" aria-labelledby="h-inbox" hidden>
+      <div class="page-head">
+        <h1 class="t" id="h-inbox">Skrzynka przetargów</h1>
+        <p class="sub" id="inboxSummary" aria-live="polite"></p>
+      </div>
+      <div class="inbox-grid">
+        <section class="card pane list-card" aria-label="Lista przetargów">
+          <header class="lc-head">
+            <div class="lc-row">
+              <label class="search" for="search">
+                <svg class="ic" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+                <span class="sr">Szukaj przetargu po nazwie lub zamawiającym</span>
+                <input id="search" type="search" maxlength="200" placeholder="Szukaj po nazwie lub zamawiającym" autocomplete="off">
+                <kbd aria-hidden="true">/</kbd>
+              </label>
+            </div>
+            <div class="seg" id="filters" role="group" aria-label="Filtr"></div>
+          </header>
+          <div class="list" id="list"></div>
+        </section>
+        <section class="card pane detail-card" id="detail" aria-label="Szczegóły przetargu" aria-live="polite"></section>
+      </div>
+    </section>
+
+    <section class="page chat" id="view-asystent" aria-labelledby="h-chat" hidden>
       <div class="page-head">
         <h1 class="t" id="h-chat">Asystent</h1>
         <p class="sub">Odpowiada na pytania o dokumenty SWZ i zawsze podaje źródła.</p>
@@ -47,7 +89,6 @@
               <span class="ai-av big"><svg class="ic" width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l1.4 3.9 3.9 1.4-3.9 1.4L8 12.4 6.6 8.5 2.7 7.1l3.9-1.4L8 1.8z"/><path d="M12.8 11.2v2.6M11.5 12.5h2.6"/></svg></span>
               <h2>Zapytaj o dokumenty SWZ</h2>
               <p>Odpowiedź powstaje tylko z fragmentów SWZ i zawsze ma źródło. Podaj numer ogłoszenia, żeby pytać o jeden przetarg.</p>
-              <noscript><p class="nojs">Ta strona potrzebuje JavaScriptu. Włącz go w przeglądarce i odśwież stronę.</p></noscript>
               <div class="sug-grid" id="examples"></div>
             </div>
           </div>

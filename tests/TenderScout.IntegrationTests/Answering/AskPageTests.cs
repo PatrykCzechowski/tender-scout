@@ -41,7 +41,8 @@ public sealed partial class AskPageTests(PostgresFixture database)
         using var client = api.CreateClient();
         var html = await client.GetStringAsync("/", Ct);
 
-        var files = Reference().Matches(html).Select(m => m.Groups["path"].Value).ToList();
+        // Links to the page's own views ("#skrzynka") are not files.
+        var files = Reference().Matches(html).Select(m => m.Groups["path"].Value).Where(p => !p.StartsWith('#')).ToList();
         foreach (var stylesheet in files.Where(f => f.EndsWith(".css", StringComparison.Ordinal)).ToList())
         {
             var css = await client.GetStringAsync("/" + stylesheet, Ct);
@@ -91,7 +92,13 @@ public sealed partial class AskPageTests(PostgresFixture database)
 
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", Ct);
 
-        Assert.Equal(["/ask"], document.GetProperty("paths").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["/ask", "/notices"], document.GetProperty("paths").EnumerateObject().Select(p => p.Name));
+        var notices = document.GetProperty("paths").GetProperty("/notices").GetProperty("get");
+        Assert.Equal(
+            ["query", "cpvPrefix", "deadlineFrom", "deadlineTo", "hasDocuments", "limit"],
+            notices.GetProperty("parameters").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
+        Assert.Equal(["200", "400"], notices.GetProperty("responses").EnumerateObject().Select(r => r.Name));
+        Assert.Contains("at most 200", notices.GetProperty("description").GetString(), StringComparison.Ordinal);
     }
 
     private WebApplicationFactory<Program> CreateApi(string environment) =>
