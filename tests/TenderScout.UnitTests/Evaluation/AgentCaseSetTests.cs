@@ -35,6 +35,12 @@ public sealed class AgentCaseSetTests : IDisposable
     [InlineData("""{"id": "bad", "expectedCalls": [], "allowedExtraCalls": []}""", "line 2")]
     [InlineData("""{"id": "bad", "question": "Pytanie?", "allowedExtraCalls": []}""", "line 2")]
     [InlineData("""{"id": "bad", "question": "Pytanie?", "expectedCalls": []}""", "line 2")]
+    [InlineData("""{"id": null, "question": "Pytanie?", "expectedCalls": [], "allowedExtraCalls": []}""", "line 2")]
+    [InlineData("""{"id": "bad", "question": null, "expectedCalls": [], "allowedExtraCalls": []}""", "line 2")]
+    [InlineData("""{"id": "bad", "question": "Pytanie?", "expectedCalls": null, "allowedExtraCalls": []}""", "line 2")]
+    [InlineData("""{"id": "bad", "question": "Pytanie?", "expectedCalls": [], "allowedExtraCalls": null}""", "line 2")]
+    [InlineData("""{"id": "bad", "question": "Pytanie?", "expectedCalls": [{"tool": null, "arguments": {}}], "allowedExtraCalls": []}""", "line 2")]
+    [InlineData("""{"id": "bad", "question": "Pytanie?", "expectedCalls": [{"tool": "get_notice", "arguments": null}], "allowedExtraCalls": []}""", "line 2")]
     public void BrokenCase_StopsTheLoad_AndIsNamed(string secondLine, string named)
     {
         var exception = Assert.Throws<InvalidDataException>(() => Load(Valid, secondLine));

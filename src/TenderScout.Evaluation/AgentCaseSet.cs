@@ -36,8 +36,12 @@ public sealed record AgentCaseSet(IReadOnlyList<AgentCase> Cases, IReadOnlyList<
 
     public const string ReferenceDateFile = "reference-date.json";
 
-    // A missing field is an error, not an empty list: a case without expected calls says so with [].
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { RespectRequiredConstructorParameters = true };
+    // A missing field or a null is an error, not an empty list: a case without expected calls says so with [].
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        RespectRequiredConstructorParameters = true,
+        RespectNullableAnnotations = true,
+    };
 
     /// <summary>The tools of the agent and the parameters of each, read from the tool definitions.</summary>
     public static IReadOnlyDictionary<string, string[]> Tools { get; } = typeof(TenderTools).GetMethods()
