@@ -140,6 +140,52 @@ public sealed class AgentLimitsTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task CallBeforeTheTwelfth_IsRun_WhenTheReplyAsksForMoreThanTwelve_AlsoWithToolsThatDoNotExist()
+    {
+        await using var agent = new AgentTestHost(await SeedNoticesAsync(1));
+        agent.Chat.Calls([Get(1), .. Unknown(12)]).Answer("Jest jedno ogłoszenie.", 1);
+
+        var response = await agent.AskAsync();
+
+        Assert.True(response.LimitReached);
+        Assert.Equal("100001-2026", Assert.Single(response.Notices).PublicationNumber);
+        Assert.Equal(
+            [("get_notice", false), .. Enumerable.Repeat(("no_such_tool", true), 11)],
+            response.ToolCalls.Select(c => (c.Name, c.Failed)));
+        Assert.Equal(2, agent.Chat.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData(12, false, 2)]
+    [InlineData(13, true, 1)]
+    public async Task CallsToToolsThatDoNotExist_CountTowardsTheTwelve(int asked, bool limitReached, int requests)
+    {
+        await using var agent = new AgentTestHost(database.ConnectionString);
+        agent.Chat.Calls(Unknown(asked)).Text();
+
+        var response = await agent.AskAsync();
+
+        Assert.Equal(limitReached, response.LimitReached);
+        Assert.True(response.Refused);
+        Assert.Equal(Enumerable.Range(1, 12).Select(i => $"{{\"i\":{i}}}"), response.ToolCalls.Select(c => c.Arguments?.GetRawText()));
+        Assert.Equal(requests, agent.Chat.Requests.Count);
+    }
+
+    [Fact]
+    public async Task ThirteenthCallInALaterReply_IsNotRun_AndEndsTheGathering()
+    {
+        await using var agent = new AgentTestHost(await SeedNoticesAsync(1));
+        agent.Chat.Calls(Unknown(12)).Calls(Get(1));
+
+        var response = await agent.AskAsync();
+
+        Assert.True(response.LimitReached);
+        Assert.True(response.Refused);
+        Assert.Equal(12, response.ToolCalls.Count);
+        Assert.Equal(2, agent.Chat.Requests.Count);
+    }
+
+    [Fact]
     public async Task AnsweringCall_ListsTheFirst25NoticesThenTheFirst12Passages_EachOnce()
     {
         // 40 notices and, in three tenders, 30 passages.
@@ -196,6 +242,9 @@ public sealed class AgentLimitsTests(PostgresFixture database)
         new($"{100000 + i}-2026", $"Ogłoszenie {i}", null, null, [], new DateOnly(2026, 11, 1).AddDays(-i), new DateOnly(2026, 12, 1).AddDays(i), null);
 
     private static (string Tool, object Arguments) Get(int i) => ("get_notice", new { publicationNumber = $"{100000 + i}-2026" });
+
+    private static (string Tool, object Arguments)[] Unknown(int count) =>
+        [.. Enumerable.Range(1, count).Select(i => ("no_such_tool", (object)new { i }))];
 
     private static (string Tool, object Arguments) Missing(int i) => ("get_notice", new { publicationNumber = $"{900000 + i}-2026" });
 

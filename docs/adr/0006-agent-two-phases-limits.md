@@ -39,7 +39,9 @@ definition.
   `/ask`; without a source the answering call is not made.
 - **Limits, as constants.** 4 requests to the model while gathering (the tool calls
   of the fourth reply are still run), 12 tool calls in a run, 120 seconds for
-  gathering on the host clock. Reaching one sets `limitReached`; cutting the list of
+  gathering on the host clock. Every call the model asks for counts, in the order
+  of its reply, also a call to a tool that does not exist; calls over the limit
+  are not run and not listed. Reaching a limit sets `limitReached`; cutting the list of
   sources does not. The numbers are provisional until an evaluation of the agent.
 - **Tool errors the model sees.** Invalid arguments: the tool's own message, which
   names the parameter and the rule, the same text an MCP client gets. Any other
@@ -106,8 +108,6 @@ and one question took 77 seconds.
   of correcting it. The first two give a wrong or wider result, not an error.
 - **Arguments that are not readable JSON are listed as `null`,** because the
   framework does not pass on their text.
-- **A call to an unknown tool is recorded when the reply arrives,** so it is listed
-  before the other calls of that reply.
 - **`Microsoft.Extensions.AI` is a direct dependency** of `TenderScout.Infrastructure`.
   It was already there through OllamaSharp; the agent uses its function-invoking
   client and `AIFunctionFactory`.

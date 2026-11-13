@@ -148,13 +148,7 @@ public sealed partial class TenderAgent(
     /// <summary>Runs one tool call for the model, keeps the sources it returns and records the call.</summary>
     private async ValueTask<object?> InvokeAsync(FunctionInvocationContext context, Run run, CancellationToken cancellationToken)
     {
-        if (run.ToolCalls.Count >= MaxToolCalls)
-        {
-            run.LimitReached = true;
-            context.Terminate = true;
-            return null;
-        }
-
+        run.RecordUnknown(logger, before: context.CallContent);
         var started = timeProvider.GetTimestamp();
         var failed = true;
         Exception? failure = null;
@@ -259,6 +253,9 @@ public sealed partial class TenderAgent(
 
         public List<AgentToolCall> ToolCalls { get; } = [];
 
+        /// <summary>The calls of the model's last reply that are not yet in <see cref="ToolCalls"/>, in its order.</summary>
+        public Queue<FunctionCallContent> Pending { get; set; } = new();
+
         public int RoundTrips { get; set; }
 
         public bool LimitReached { get; set; }
@@ -286,6 +283,19 @@ public sealed partial class TenderAgent(
             Passages.AddRange((sources.Passages ?? []).Except(Passages));
         }
 
+        /// <summary>
+        /// Lists, as failed, the calls the last reply holds before <paramref name="before"/>, or all that are left
+        /// of it. They name tools that do not exist: the framework answers those by itself and does not pass them
+        /// on, so they are listed here, where they stand in the reply.
+        /// </summary>
+        public void RecordUnknown(ILogger logger, FunctionCallContent? before = null)
+        {
+            while (Pending.TryDequeue(out var call) && !ReferenceEquals(call, before))
+            {
+                Record(logger, null, call, 0, failed: true);
+            }
+        }
+
         public void Record(ILogger logger, Exception? failure, FunctionCallContent call, long durationMs, bool failed)
         {
             JsonElement? arguments = call.Arguments is null ? null : JsonSerializer.SerializeToElement(call.Arguments);
@@ -299,8 +309,8 @@ public sealed partial class TenderAgent(
     }
 
     /// <summary>
-    /// Sits between the function-invoking client and the model: counts the requests, stops the gathering at the
-    /// round limit, and records the calls to tools that do not exist, which the framework answers by itself.
+    /// Sits between the function-invoking client and the model: counts the requests and the tool calls the model
+    /// asks for, and ends the gathering at either limit.
     /// </summary>
     private sealed class RoundTrips(IChatClient inner, Run run, ILogger logger) : DelegatingChatClient(inner)
     {
@@ -309,9 +319,11 @@ public sealed partial class TenderAgent(
             ChatOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            if (run.RoundTrips == MaxRoundTrips)
+            run.RecordUnknown(logger);
+            if (run.LimitReached || run.RoundTrips == MaxRoundTrips)
             {
-                // The model asked for tools in its last allowed reply. They were run; it is not asked again.
+                // The last reply was the last one allowed, or asked for too many tool calls. The calls it was
+                // allowed were run; the model is not asked again.
                 run.LimitReached = true;
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty));
             }
@@ -319,15 +331,20 @@ public sealed partial class TenderAgent(
             run.RoundTrips++;
             var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
-            var unknown = response.Messages
-                .SelectMany(m => m.Contents)
-                .OfType<FunctionCallContent>()
-                .Where(call => options?.Tools?.Any(tool => tool.Name == call.Name) != true);
-            foreach (var call in unknown.Take(MaxToolCalls - run.ToolCalls.Count))
+            // Every call the reply asks for, also to a tool that does not exist, takes one of the run's tool calls,
+            // in the reply's order. Calls over the limit are taken out of the reply, so nothing runs or answers them.
+            var calls = response.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>().ToList();
+            var excess = calls.Skip(MaxToolCalls - run.ToolCalls.Count).ToList();
+            if (excess.Count > 0)
             {
-                run.Record(logger, null, call, 0, failed: true);
+                run.LimitReached = true;
+                foreach (var message in response.Messages)
+                {
+                    message.Contents = [.. message.Contents.Except(excess)];
+                }
             }
 
+            run.Pending = new(calls.Except(excess));
             return response;
         }
     }

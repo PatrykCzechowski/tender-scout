@@ -62,9 +62,9 @@ public sealed class AgentFlowTests(PostgresFixture database)
 
         var response = await agent.AskAsync();
 
-        // The call to the tool that does not exist is recorded when the reply comes, before the calls that are run.
+        // In the order the model asked, also the call to the tool that does not exist, which the framework answers.
         Assert.Equal(
-            [("no_such_tool", true), ("search_notices", false), ("get_notice", true), ("search_tender_documents", false), ("get_notice", true)],
+            [("search_notices", false), ("get_notice", true), ("no_such_tool", true), ("search_tender_documents", false), ("get_notice", true)],
             response.ToolCalls.Select(c => (c.Name, c.Failed)));
         Assert.Null(response.ToolCalls[4].Arguments);
         var logged = agent.AgentLog.Where(entry => entry.Contains("Agent tool call", StringComparison.Ordinal)).ToList();
