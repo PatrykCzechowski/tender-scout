@@ -139,6 +139,48 @@ development machine. It is plain HTML, CSS and JavaScript in `src/TenderScout.Ap
 The fonts Geist, Geist Mono and Newsreader are stored with the page under the SIL Open Font License 1.1; their licence
 texts and sources are in `src/TenderScout.Api/wwwroot/fonts`. The icons are part of this project.
 
+### MCP server
+
+`TenderScout.Mcp` serves three read-only tools over the [Model Context Protocol](https://modelcontextprotocol.io), so
+an MCP client can search the stored notices and tender documents. The decisions behind it are in
+[ADR-0005](docs/adr/0005-mcp-server-shared-tools.md).
+
+| Tool | Parameters | Returns |
+| --- | --- | --- |
+| `search_notices` | `query` (words in the title or buyer name, 1-200 characters), `cpvPrefix` (2-8 digits), `deadlineFrom`, `deadlineTo` (dates as `yyyy-MM-dd`), `limit` (1-25, default 10); all optional | Notices, newest first |
+| `get_notice` | `publicationNumber` (for example `123456-2026`), required | One notice with all its CPV codes, or `found: false` |
+| `search_tender_documents` | `query` (1-1000 characters, required), `publicationNumber`, `limit` (1-10, default 5) | The best passages from hybrid search, with document, tender and page |
+
+Write the text of a query in Polish, the language of the notices and documents. Invalid input gives an error result
+that names the parameter. The document search needs `bge-m3` on Ollama, like the Worker; the two notice tools work
+without it.
+
+The server starts with the AppHost as the `mcp` resource, after the migrations. It speaks Streamable HTTP at `/mcp`:
+take the address of the resource from the dashboard and add `/mcp`. Started alone with
+`dotnet run --project src/TenderScout.Mcp`, it listens on `http://localhost:5160` and needs the connection string
+`ConnectionStrings:tenderscout`. Set the Ollama address as for the other hosts:
+
+```sh
+dotnet user-secrets --project src/TenderScout.Mcp set "Embedding:Endpoint" "http://<ollama-host>:11434"
+```
+
+To try the tools, connect [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector), which needs
+Node.js 22.19 or newer:
+
+```sh
+npx @modelcontextprotocol/inspector --server-url http://<mcp-host>/mcp --transport http
+```
+
+Or call a tool from the shell. A value made of digits must be quoted as JSON, or the Inspector sends it as a number:
+
+```sh
+npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http --method tools/list
+npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http \
+  --method tools/call --tool-name search_notices --tool-arg 'cpvPrefix="72"' --tool-arg limit=5
+```
+
+The server has no authentication yet. Keep it on the development machine.
+
 ### Evaluation
 
 `dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions
@@ -214,10 +256,10 @@ fusion and the stop-word list:
 | `DocumentImport:DocKinds` | `swz` | import | Manifest `doc_kind` values to import |
 | `DocumentChunking:ChunkSize` | `1200` | Worker | Maximum chunk length in characters |
 | `DocumentChunking:ChunkOverlap` | `150` | Worker | Text a chunk repeats from the previous one |
-| `Embedding:Endpoint` | `http://localhost:11434` in the Worker and API | Worker, search, API, evaluation | Address of the Ollama server |
-| `Embedding:Model` | `bge-m3` | Worker, search, API | Model name, stored with every vector |
+| `Embedding:Endpoint` | `http://localhost:11434` in the Worker, API and MCP server | Worker, search, API, MCP server, evaluation | Address of the Ollama server |
+| `Embedding:Model` | `bge-m3` | Worker, search, API, MCP server | Model name, stored with every vector |
 | `Embedding:BatchSize` | `32` | Worker | Chunks per request; each batch is saved separately |
-| `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API | Time limit of one attempt |
+| `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API, MCP server | Time limit of one attempt |
 | `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model |
 | `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
 | `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of the single attempt at an answer |
