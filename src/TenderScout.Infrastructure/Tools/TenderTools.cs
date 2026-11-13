@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -68,6 +69,19 @@ public sealed partial class TenderTools(
     /// </summary>
     public static JsonSerializerOptions SerializerOptions { get; } =
         new(McpJsonUtilities.DefaultOptions) { DefaultIgnoreCondition = JsonIgnoreCondition.Never };
+
+    /// <summary>
+    /// The same tools as functions a chat client can call in process: the names of the MCP attributes, the
+    /// descriptions and parameters of the methods, and results written with <see cref="SerializerOptions"/>.
+    /// </summary>
+    public IReadOnlyList<AIFunction> AsFunctions() =>
+        [.. typeof(TenderTools).GetMethods()
+            .Where(method => method.IsDefined(typeof(McpServerToolAttribute)))
+            .Select(method => AIFunctionFactory.Create(method, this, new AIFunctionFactoryOptions
+            {
+                Name = method.GetCustomAttribute<McpServerToolAttribute>()!.Name,
+                SerializerOptions = SerializerOptions,
+            }))];
 
     [McpServerTool(Name = "search_notices", UseStructuredContent = true, ReadOnly = true)]
     [Description(

@@ -212,6 +212,66 @@ npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http
 
 The server has no authentication yet. Keep it on the development machine.
 
+### Agent
+
+`POST /agent` answers a question that one search cannot answer, for example about the documents of a tender that is
+named only by its title. A chat model first calls the three tools of the [MCP server](#mcp-server), in process, to
+gather notices and document passages. A second call then answers only from those sources and names the ones it used.
+A model that calls no tool, or finds nothing, gets a refusal instead of an answer from its own knowledge. The
+decisions and the model trial behind it are in [ADR-0006](docs/adr/0006-agent-two-phases-limits.md).
+
+The agent needs a chat model that can call tools, which the model of `/ask` cannot. It is named by its own setting
+and uses the Ollama server and time limit of `Chat`:
+
+```sh
+ollama pull SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M
+dotnet user-secrets --project src/TenderScout.Api set "Agent:Model" "SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M"
+```
+
+```sh
+curl -X POST http://<api-host>/agent -H "Content-Type: application/json" \
+  -d '{"question": "Jakie wadium trzeba wnieść w przetargu na serwery dla urzędu gminy?"}'
+```
+
+```json
+{
+  "refused": false,
+  "answer": "Wadium wynosi 10 000 zł.",
+  "citations": [
+    { "docId": "swz-001", "publicationNumber": "123456-2026", "page": 13, "passage": "<stored passage text>" }
+  ],
+  "notices": [
+    {
+      "publicationNumber": "123456-2026", "title": "Dostawa serwerów", "buyerName": "Urząd Gminy",
+      "mainCpvCode": "48820000", "publicationDate": "2026-11-02", "submissionDeadline": "2026-12-01", "link": null
+    }
+  ],
+  "limitReached": false,
+  "toolCalls": [
+    { "name": "search_notices", "arguments": { "query": "serwery urząd gminy" }, "durationMs": 12, "failed": false },
+    { "name": "search_tender_documents", "arguments": { "query": "wadium", "publicationNumber": "123456-2026" }, "durationMs": 85, "failed": false }
+  ]
+}
+```
+
+`question` has 1 to 1000 characters. `citations` and `notices` are the sources the answer names, as the tools
+returned them. `toolCalls` lists every call the model made, in order, also the failed ones. A refusal is 200 with
+`"refused": true`, the answer of `/ask` and no sources. Invalid input gives 400 with problem details; an unreachable
+chat or embedding model, or no `Agent:Model`, gives 503. The example above is invented.
+
+The search is limited, and `limitReached` is `true` when it stopped at a limit; the answer then rests on what was
+found until then:
+
+| Limit | Value |
+| --- | --- |
+| Requests to the model while gathering | 4 |
+| Tool calls in one run | 12 |
+| Time for gathering | 120 seconds |
+| Sources given to the answering call | the first 25 notices and the first 12 passages |
+
+With the model above on a GPU with 8 GB of memory a question takes 10 to 45 seconds. The endpoint has no
+authentication yet; keep it on the development machine.
+
 ### Evaluation
 
 `dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions
@@ -293,7 +353,8 @@ fusion and the stop-word list:
 | `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API, MCP server | Time limit of one attempt |
 | `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model |
 | `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
-| `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of the single attempt at an answer |
+| `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of one request to the chat model |
+| `Agent:Model` | none; `/agent` answers 503 without it | API | Chat model of the agent; it must be able to call tools |
 | `Evaluation:GoldenSetPath` | none, required | evaluation | The golden set JSONL file |
 | `Evaluation:JudgeModel` | `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | evaluation | Model that judges the answers |
 

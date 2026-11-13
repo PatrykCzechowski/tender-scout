@@ -178,7 +178,7 @@ public sealed class ToolContractTests(PostgresFixture database)
     }
 
     /// <summary>A checksum of every row of the three tables the tools read.</summary>
-    private static Task<string> SnapshotAsync(TenderScoutDbContext dbContext) =>
+    internal static Task<string> SnapshotAsync(TenderScoutDbContext dbContext) =>
         dbContext.Database
             .SqlQuery<string>($"""
                 SELECT (SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM notices t)

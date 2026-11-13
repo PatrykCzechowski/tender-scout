@@ -92,7 +92,7 @@ public sealed partial class AskPageTests(PostgresFixture database)
 
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", Ct);
 
-        Assert.Equal(["/ask", "/notices"], document.GetProperty("paths").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["/ask", "/agent", "/notices"], document.GetProperty("paths").EnumerateObject().Select(p => p.Name));
         var notices = document.GetProperty("paths").GetProperty("/notices").GetProperty("get");
         Assert.Equal(
             ["query", "cpvPrefix", "deadlineFrom", "deadlineTo", "hasDocuments", "limit"],
