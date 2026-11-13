@@ -1,0 +1,19 @@
+Fonts used by the web page, stored here so the page makes no external requests.
+All three families are licensed under the SIL Open Font License 1.1; the licence texts with their copyright lines
+are next to the files. The files are copied unchanged: no conversion and no subsetting. Downloaded 2026-11-13.
+
+Geist (weights 400-600, one variable file)
+  File:    Geist-Variable.woff2
+  Source:  https://github.com/vercel/geist-font, tag v1.9.2, fonts/Geist/webfonts/Geist[wght].woff2
+  Licence: Geist-OFL.txt (OFL.txt of the same tag; it covers Geist and Geist Mono)
+
+Geist Mono (weights 400-500, one variable file)
+  File:    GeistMono-Variable.woff2
+  Source:  https://github.com/vercel/geist-font, tag v1.9.2, fonts/GeistMono/webfonts/GeistMono[wght].woff2
+  Licence: Geist-OFL.txt
+
+Newsreader (regular, 16 pt optical size, used for quoted passages)
+  File:    Newsreader16pt-Regular.woff2
+  Source:  https://github.com/productiontype/Newsreader, commit cfcb4f7af0,
+           fonts/static/woff2/Newsreader16pt-Regular.woff2
+  Licence: Newsreader-OFL.txt (OFL.txt of the same commit)
