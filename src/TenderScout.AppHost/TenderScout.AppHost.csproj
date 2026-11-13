@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TenderScout.Api\TenderScout.Api.csproj" />
     <ProjectReference Include="..\TenderScout.DocumentImport\TenderScout.DocumentImport.csproj" />
+    <ProjectReference Include="..\TenderScout.Mcp\TenderScout.Mcp.csproj" />
     <ProjectReference Include="..\TenderScout.MigrationService\TenderScout.MigrationService.csproj" />
     <ProjectReference Include="..\TenderScout.Worker\TenderScout.Worker.csproj" />
   </ItemGroup>

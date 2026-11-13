@@ -23,6 +23,13 @@ builder.AddProject<Projects.TenderScout_Api>("api")
     .WaitForCompletion(migrations)
     .WithHttpHealthCheck("/health");
 
+// MCP server: the notice and document tools for MCP clients, at /mcp.
+builder.AddProject<Projects.TenderScout_Mcp>("mcp")
+    .WithReference(database)
+    .WaitFor(database)
+    .WaitForCompletion(migrations)
+    .WithHttpHealthCheck("/health");
+
 builder.AddProject<Projects.TenderScout_Worker>("worker")
     .WithReference(database)
     .WithReference(rabbitmq)
