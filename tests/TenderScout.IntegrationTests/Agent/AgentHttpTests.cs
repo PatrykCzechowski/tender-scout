@@ -40,6 +40,20 @@ public sealed class AgentHttpTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task BodyThatIsNotJson_Is400_WithoutCallingAModel()
+    {
+        await using var agent = new AgentTestHost(database.ConnectionString);
+        using var client = agent.CreateClient();
+
+        var response = await client.PostAsync("/agent", new StringContent("{question: ", Encoding.UTF8, "application/json"), Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Empty(agent.Chat.Requests);
+        Assert.Empty(agent.Errors);
+    }
+
+    [Fact]
     public async Task QuestionOf1And1000Characters_ReachesTheModelTrimmed()
     {
         await using var agent = new AgentTestHost(database.ConnectionString);

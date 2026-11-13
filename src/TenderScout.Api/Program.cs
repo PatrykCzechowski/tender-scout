@@ -11,6 +11,9 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
 builder.Services.AddProblemDetails();
+
+// A body that is not JSON is the caller's mistake in every environment: 400, not an exception as in Development.
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
 builder.Services.AddOpenApi();
 builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
@@ -19,6 +22,9 @@ builder.Services.AddTenderAgent();
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+// Gives an error response that has no body, such as that 400, problem details.
+app.UseStatusCodePages();
 
 // The ask page: index.html and its files from wwwroot, served at "/". Unknown paths stay 404.
 app.UseDefaultFiles();
