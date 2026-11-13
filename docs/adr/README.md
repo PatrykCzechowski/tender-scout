@@ -15,3 +15,4 @@ instead, with a dated "amended" note in its status.
 | [0003](0003-embeddings-bge-m3-ollama-pgvector.md) | `bge-m3` on Ollama, stored in pgvector with an HNSW cosine index | Accepted |
 | [0004](0004-answers-bielik-citations-refusal.md) | Answers from Bielik 4.5B with numbered-passage citations and a refusal rule | Accepted |
 | [0005](0005-mcp-server-shared-tools.md) | MCP server over Streamable HTTP with tools defined once | Accepted |
+| [0006](0006-agent-two-phases-limits.md) | Agent in two phases: tool calls gather sources, one call answers from them | Accepted |
