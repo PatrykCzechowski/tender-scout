@@ -127,14 +127,45 @@ starts with Ollama off. An answer takes several seconds; the example above is in
 The API describes its endpoints in an OpenAPI document at `/openapi/v1.json`. In the Development environment
 `/scalar` shows that document as a page where the endpoints can be tried.
 
+### Listing notices
+
+`GET /notices` lists the stored notices, soonest submission deadline first; notices without a deadline come last. It
+takes the filters of the `search_notices` tool, with the same rules, plus a documents filter. All are optional:
+
+| Parameter | Meaning |
+| --- | --- |
+| `query` | Words that must all occur in the title or the buyer name, 1 to 200 characters |
+| `cpvPrefix` | First 2 to 8 digits of the main or any other CPV code, for example `72` |
+| `deadlineFrom`, `deadlineTo` | Submission deadline range, `yyyy-MM-dd`, both inclusive |
+| `hasDocuments` | `true`: only notices with a stored tender document; `false`: only those without |
+| `limit` | 1 to 200; 50 when not given |
+
+```sh
+curl "http://<api-host>/notices?cpvPrefix=72&deadlineFrom=2026-12-01&limit=20"
+```
+
+The reply is `{ "total": n, "notices": [...] }`: `total` counts every matching notice whatever the limit, and each
+notice has its publication number, title, buyer, main and all CPV codes, publication date, deadline, TED link and
+`hasDocuments`. Invalid parameters give 400 with problem details naming each of them. The endpoint only reads.
+
 ### Web page
 
-The API also serves a page for asking questions at its root: `http://localhost:5150/` when the API runs alone with
-`dotnet run --project src/TenderScout.Api`, or the address of the `api` resource in the AppHost dashboard. The page
-sends each question to `POST /ask`, optionally limited to one tender by its publication number, and shows the answer
-with its sources (document, tender, page and the passage), a refusal, or what went wrong. Each question is answered on
-its own and nothing is saved. Like `/ask`, the page needs both models, and it has no sign-in yet, so keep it on the
-development machine. It is plain HTML, CSS and JavaScript in `src/TenderScout.Api/wwwroot`, with no build step.
+The API also serves a web page at its root: `http://localhost:5150/` when the API runs alone with
+`dotnet run --project src/TenderScout.Api`, or the address of the `api` resource in the AppHost dashboard. It has three
+views, and the part of the address after `#` says which one is shown:
+
+- **Pulpit** (`/`): counts of open tenders (deadline today or later), of those due within 7 days and of those with
+  stored documents, and a calendar of submission deadlines for this week and the next four.
+- **Skrzynka** (`#skrzynka`): open tenders by deadline, with a search, five filters (all, with documents, due within 7
+  days, CPV 72, CPV 48) and a detail pane with the link to TED. For a tender with stored documents the pane leads to
+  the assistant with that tender chosen.
+- **Asystent** (`#asystent`): sends each question to `POST /ask`, optionally limited to one tender by its publication
+  number, and shows the answer with its sources (document, tender, page and the passage), a refusal, or what went
+  wrong. Each question is answered on its own and nothing is saved; the next question can be typed while one waits.
+
+The notice views read `GET /notices`. The assistant needs both models, like `/ask`. The page has no sign-in yet, so
+keep it on the development machine. It is plain HTML, CSS and JavaScript in `src/TenderScout.Api/wwwroot`, with no
+build step.
 
 The fonts Geist, Geist Mono and Newsreader are stored with the page under the SIL Open Font License 1.1; their licence
 texts and sources are in `src/TenderScout.Api/wwwroot/fonts`. The icons are part of this project.

@@ -111,20 +111,11 @@ public sealed partial class TenderTools(
         int limit = DefaultNoticeLimit,
         CancellationToken cancellationToken = default)
     {
-        var text = Query(query, nameof(query), MaxNoticeQueryLength);
-        var prefix = Trimmed(cpvPrefix, nameof(cpvPrefix));
-        if (prefix is not null && !CpvPrefixPattern().IsMatch(prefix))
-        {
-            throw new McpException($"{nameof(cpvPrefix)} must be 2 to 8 digits, for example 72.");
-        }
-
+        var text = NoticeQuery(query);
+        var prefix = CpvPrefix(cpvPrefix);
         var from = Date(deadlineFrom, nameof(deadlineFrom));
         var to = Date(deadlineTo, nameof(deadlineTo));
-        if (to < from)
-        {
-            throw new McpException($"{nameof(deadlineTo)} must not be before {nameof(deadlineFrom)}.");
-        }
-
+        CheckDeadlineRange(from, to);
         CheckLimit(limit, MaxNoticeLimit);
 
         var found = await notices.SearchAsync(text, prefix, from, to, limit, cancellationToken).ConfigureAwait(false);
@@ -195,6 +186,27 @@ public sealed partial class TenderTools(
         return new PassageSearchResult([.. found.Select(c => new Passage(c.DocId, c.PublicationNumber, c.PageNumber, c.Text))]);
     }
 
+    // The filter rules of search_notices. GET /notices applies the same ones, so they are public; each returns the
+    // trimmed or parsed value, or null when the filter was not given, and throws McpException with the message.
+
+    public static string? NoticeQuery(string? value) => Query(value, "query", MaxNoticeQueryLength);
+
+    public static string? CpvPrefix(string? value)
+    {
+        var prefix = Trimmed(value, "cpvPrefix");
+        return prefix is null || CpvPrefixPattern().IsMatch(prefix)
+            ? prefix
+            : throw new McpException("cpvPrefix must be 2 to 8 digits, for example 72.");
+    }
+
+    public static void CheckDeadlineRange(DateOnly? deadlineFrom, DateOnly? deadlineTo)
+    {
+        if (deadlineTo < deadlineFrom)
+        {
+            throw new McpException("deadlineTo must not be before deadlineFrom.");
+        }
+    }
+
     /// <returns>The trimmed text, or <see langword="null"/> when the parameter was not given.</returns>
     private static string? Trimmed(string? value, string parameter)
     {
@@ -220,7 +232,7 @@ public sealed partial class TenderTools(
             : throw new McpException($"{parameter} must be 1 to 6 digits, a hyphen and 4 digits, for example 123456-2026.");
     }
 
-    private static DateOnly? Date(string? value, string parameter)
+    public static DateOnly? Date(string? value, string parameter)
     {
         var text = Trimmed(value, parameter);
         if (text is null)
