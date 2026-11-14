@@ -28,7 +28,7 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
 
     /// <summary>
     /// How long a test waits for a step of the pipeline before it fails. The slowest passing test of this class on the
-    /// CI runner took 6.4 s, set-up included.
+    /// CI runner took 7.1 s, set-up included.
     /// </summary>
     private static readonly TimeSpan StepLimit = TimeSpan.FromSeconds(60);
 
