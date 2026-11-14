@@ -16,9 +16,11 @@ namespace TenderScout.UnitTests.Answering;
 
 /// <summary>
 /// The spans and metrics of the registered chat and embedding clients, as production builds them, collected by the
-/// OpenTelemetry SDK in memory. The network is replaced; each test uses a model name of its own, because the clients
-/// of other tests write to the same source at the same time.
+/// OpenTelemetry SDK in memory. The network is replaced; each test uses a model name of its own. The tests run alone:
+/// every client of Microsoft.Extensions.AI has a meter of the same name, and another test disposing its client while
+/// these collect was seen to take the recorded tokens with it.
 /// </summary>
+[Collection(nameof(ModelTelemetryTests))]
 public sealed class ModelTelemetryTests
 {
     private const string GenAi = "Experimental.Microsoft.Extensions.AI";
@@ -236,3 +238,6 @@ public sealed class ModelTelemetryTests
         }
     }
 }
+
+[CollectionDefinition(nameof(ModelTelemetryTests), DisableParallelization = true)]
+public sealed class ModelTelemetryTestsCollection;
