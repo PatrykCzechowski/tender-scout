@@ -1,0 +1,19 @@
+# Nothing enters the build context unless it is let in below, so a private file in a working copy
+# can never end up in an image.
+*
+
+# What the build reads: the projects and the three files that decide the SDK and the packages.
+!src/
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+
+# Left out inside src/: build output, and settings of one machine or one environment.
+**/bin/
+**/obj/
+**/appsettings.*.json
+**/launchSettings.json
+**/secrets.json
+**/*.user
+**/.env
+**/.env.*
