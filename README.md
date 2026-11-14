@@ -219,9 +219,18 @@ views, and the part of the address after `#` says which one is shown:
   number, and shows the answer with its sources (document, tender, page and the passage), a refusal, or what went
   wrong. Each question is answered on its own and nothing is saved; the next question can be typed while one waits.
 
-The notice views read `GET /notices`. The assistant needs both models, like `/ask`. The page has no sign-in yet, so
-keep it on the development machine. It is plain HTML, CSS and JavaScript in `src/TenderScout.Api/wwwroot`, with no
-build step.
+The notice views read `GET /notices`. The assistant needs both models, like `/ask`. The page is plain HTML, CSS and
+JavaScript in `src/TenderScout.Api/wwwroot`, with no build step.
+
+**Sign-in.** The page first shows a sign-in screen and calls no protected endpoint. "Zaloguj się" sends the browser to
+the issuer from `/sign-in-settings` (the local Keycloak; test user `tester`, password `local-only-password`) with the
+authorization code flow and PKCE, asking for both scopes, and every call to the API then carries the access token. The
+token is kept in memory only, never in browser storage, so a reload signs the page out; there is no refresh token.
+When the API answers 401, for example after the token's five minutes, the page goes to the issuer and back while the
+issuer's session lasts, keeping the view and a typed question; a 401 right after signing in shows an error instead of
+trying again. 403 shows that the account may not do this. "Wyloguj się" also ends the session at the issuer. The realm
+accepts the page only at `http://localhost:5150/` and `https://localhost:7150/`, the addresses of the API in the
+AppHost and with `dotnet run`, so sign-in does not work at the address of a container.
 
 The fonts Geist, Geist Mono and Newsreader are stored with the page under the SIL Open Font License 1.1; their licence
 texts and sources are in `src/TenderScout.Api/wwwroot/fonts`. The icons are part of this project.

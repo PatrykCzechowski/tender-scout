@@ -47,3 +47,11 @@
 /* Contrast: the design's lightest grey (--ink-4, about 3:1 on white) is kept only for large text; past calendar
    days are small text, so they use the next darker grey of the palette. */
 .cal-cell.past { color: var(--ink-3); }
+
+/* Sign-in: the signed-out screen and the sign-out control at the foot of the menu. */
+.signed-out { height: 100%; display: grid; place-items: center; }
+.so-card { width: min(420px, 100%); padding: 28px; gap: 14px; box-shadow: var(--shadow); }
+.so-card h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.so-card p { color: var(--ink-2); }
+.so-card .btn { align-self: flex-start; }
+.side-user { margin-top: auto; }
