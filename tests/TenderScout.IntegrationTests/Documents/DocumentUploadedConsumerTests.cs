@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using MassTransit;
 using MassTransit.Testing;
@@ -25,6 +26,23 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
     private const string Model = "bge-m3";
     private const int RetryLimit = 5;
 
+    /// <summary>
+    /// How long a test waits for a step of the pipeline before it fails. The slowest passing test of this class on the
+    /// CI runner took 6.4 s, set-up included.
+    /// </summary>
+    private static readonly TimeSpan StepLimit = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long the two retry tests wait; the real backoff of five retries takes about 36 seconds.</summary>
+    private static readonly TimeSpan RetriesLimit = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// Reads a list of the test harness as it is, without waiting. Every waiting read of these lists ends once the bus
+    /// has been idle for the harness's inactivity limit (1.2 s by default), and it stays ended for the rest of the
+    /// test: a test that spent that long before its first publish found the list empty and failed (#52). So the tests
+    /// read the lists with a token that is already cancelled and wait for the outcome themselves.
+    /// </summary>
+    private static readonly CancellationToken NoWait = new(canceled: true);
+
     private readonly DocumentTestFolder _folder = new();
     private readonly FakeEmbeddingGenerator _generator = new();
 
@@ -45,16 +63,7 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         Assert.NotEmpty(document.Chunks);
         Assert.Equal(document.CreatedAt, document.UpdatedAt);
 
-        var published = 0;
-        await foreach (var _ in harness.Published.SelectAsync<ChunksCreated>(m => m.Context.Message.DocId == message.DocId, Ct))
-        {
-            if (++published == 2)
-            {
-                break;
-            }
-        }
-
-        Assert.Equal(2, published);
+        Assert.Equal(2, harness.Published.Select<ChunksCreated>(m => m.Context.Message.DocId == message.DocId, NoWait).Count());
     }
 
     [Fact]
@@ -159,8 +168,11 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         var message = CreateMessage(Encoding.ASCII.GetBytes(content));
 
         await harness.Bus.Publish(message, Ct);
+        await WaitUntilAsync(
+            $"a fault of {message.DocId} published",
+            () => Task.FromResult(harness.Published.Select<Fault<DocumentUploaded>>(f => f.Context.Message.Message.DocId == message.DocId, NoWait).Any()),
+            StepLimit);
 
-        Assert.True(await harness.Published.Any<Fault<DocumentUploaded>>(f => f.Context.Message.Message.DocId == message.DocId, Ct));
         await using var dbContext = database.CreateDbContext();
         Assert.False(await dbContext.Documents.AnyAsync(d => d.DocId == message.DocId, Ct));
         Assert.False(await harness.Published.Any<ChunksCreated>(m => m.Context.Message.DocId == message.DocId, Ct));
@@ -176,7 +188,10 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
 
         await harness.Bus.Publish(message, Ct);
 
-        Assert.True(await harness.Published.Any<Fault<DocumentUploaded>>(f => f.Context.Message.Message.DocId == message.DocId, Ct));
+        await WaitUntilAsync(
+            $"a fault of {message.DocId} published",
+            () => Task.FromResult(harness.Published.Select<Fault<DocumentUploaded>>(f => f.Context.Message.Message.DocId == message.DocId, NoWait).Any()),
+            StepLimit);
     }
 
     [Fact]
@@ -238,7 +253,7 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         _generator.Transform = vectors => failures-- > 0 ? throw new HttpRequestException("Connection refused (simulated)") : vectors;
 
         await harness.Bus.Publish(new ChunksCreated(docId), Ct);
-        await WaitUntilAsync(async () => (await SingleDocumentAsync(docId)).Chunks.All(c => c.Embedding is not null));
+        await WaitUntilAsync($"every chunk of {docId} embedded", async () => (await SingleDocumentAsync(docId)).Chunks.All(c => c.Embedding is not null), RetriesLimit);
 
         Assert.Equal(3, _generator.Calls.Count);
         Assert.False(await harness.Published.Any<Fault<ChunksCreated>>(f => f.Context.Message.Message.DocId == docId, Ct));
@@ -254,7 +269,7 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         _generator.Transform = _ => throw new HttpRequestException("Connection refused (simulated)");
 
         await harness.Bus.Publish(new ChunksCreated(docId), Ct);
-        await WaitUntilAsync(() => Task.FromResult(_generator.Calls.Count >= 1 + RetryLimit));
+        await WaitUntilAsync($"{1 + RetryLimit} calls to the generator", () => Task.FromResult(_generator.Calls.Count >= 1 + RetryLimit), RetriesLimit);
 
         Assert.True(await harness.Published.Any<Fault<ChunksCreated>>(f => f.Context.Message.Message.DocId == docId, Ct));
         Assert.Equal(1 + RetryLimit, _generator.Calls.Count);
@@ -270,48 +285,39 @@ public sealed class DocumentUploadedConsumerTests(PostgresFixture database, Rabb
         return harness;
     }
 
+    /// <summary>Waits until the upload consumer has handled the document <paramref name="expected"/> times, each without an exception.</summary>
     private static async Task WaitForConsumedAsync(ITestHarness harness, string docId, int expected)
     {
-        var consumed = new List<IReceivedMessage<DocumentUploaded>>();
-        await foreach (var received in harness.GetConsumerHarness<DocumentUploadedConsumer>().Consumed
-            .SelectAsync<DocumentUploaded>(m => m.Context.Message.DocId == docId, Ct))
-        {
-            consumed.Add(received);
-            if (consumed.Count == expected)
-            {
-                break;
-            }
-        }
+        var consumed = harness.GetConsumerHarness<DocumentUploadedConsumer>().Consumed;
+        IReceivedMessage<DocumentUploaded>[] OfDocument() => [.. consumed.Select<DocumentUploaded>(m => m.Context.Message.DocId == docId, NoWait)];
 
-        Assert.Equal(expected, consumed.Count);
-        Assert.All(consumed, m => Assert.Null(m.Exception));
+        await WaitUntilAsync($"{expected} DocumentUploaded of {docId} consumed", () => Task.FromResult(OfDocument().Length >= expected), StepLimit);
+        Assert.All(OfDocument(), m => Assert.Null(m.Exception));
     }
 
-    private static async Task WaitUntilAsync(Func<Task<bool>> condition)
+    /// <summary>Polls the condition every 100 ms; fails with the outcome that did not come once the limit has passed.</summary>
+    private static async Task WaitUntilAsync(string outcome, Func<Task<bool>> condition, TimeSpan limit)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        var waited = Stopwatch.StartNew();
         while (!await condition())
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(100), timeout.Token);
+            if (waited.Elapsed > limit)
+            {
+                Assert.Fail($"Waited {waited.Elapsed.TotalSeconds:0.0} s for {outcome}; it did not happen.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), Ct);
         }
     }
 
+    /// <summary>Waits until the embedding consumer has handled the document <paramref name="expected"/> times, each without an exception.</summary>
     private static async Task WaitForEmbeddingAsync(ITestHarness harness, string docId, int expected)
     {
-        var consumed = new List<IReceivedMessage<ChunksCreated>>();
-        await foreach (var received in harness.GetConsumerHarness<ChunksCreatedConsumer>().Consumed
-            .SelectAsync<ChunksCreated>(m => m.Context.Message.DocId == docId, Ct))
-        {
-            consumed.Add(received);
-            if (consumed.Count == expected)
-            {
-                break;
-            }
-        }
+        var consumed = harness.GetConsumerHarness<ChunksCreatedConsumer>().Consumed;
+        IReceivedMessage<ChunksCreated>[] OfDocument() => [.. consumed.Select<ChunksCreated>(m => m.Context.Message.DocId == docId, NoWait)];
 
-        Assert.Equal(expected, consumed.Count);
-        Assert.All(consumed, m => Assert.Null(m.Exception));
+        await WaitUntilAsync($"{expected} ChunksCreated of {docId} consumed", () => Task.FromResult(OfDocument().Length >= expected), StepLimit);
+        Assert.All(OfDocument(), m => Assert.Null(m.Exception));
     }
 
     /// <summary>The production bus setup (consumers, retry, RabbitMQ topology) wrapped in the MassTransit test harness.</summary>
