@@ -1,15 +1,17 @@
 using Microsoft.Extensions.AI;
 using TenderScout.Evaluation;
+using TenderScout.Infrastructure.Agent;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
 
 const string RetrievalOnly = "--retrieval-only";
 const string WriteFixture = "--write-fixture";
+const string AgentCases = "--agent-cases";
 
-if (args.Except([RetrievalOnly, WriteFixture]).Any())
+if (args.Except([RetrievalOnly, WriteFixture, AgentCases]).Any())
 {
-    Console.Error.WriteLine($"Usage: dotnet run --project src/TenderScout.Evaluation [-- {RetrievalOnly} | {WriteFixture}]");
+    Console.Error.WriteLine($"Usage: dotnet run --project src/TenderScout.Evaluation [-- {RetrievalOnly} | {WriteFixture} | {AgentCases}]");
     return 1;
 }
 
@@ -23,6 +25,9 @@ builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<EvaluationRunner>();
+builder.Services.AddScoped<NoticeQueries>();
+builder.Services.AddTenderAgent();
+builder.Services.AddScoped<AgentEvaluationRunner>();
 
 using var host = builder.Build();
 var repositoryRoot = FindRepositoryRoot();
@@ -31,6 +36,17 @@ if (args.Contains(WriteFixture))
 {
     await SyntheticSet.WriteVectorsAsync(host.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(), repositoryRoot, CancellationToken.None);
     return 0;
+}
+
+var resultsFolder = Path.Combine(repositoryRoot, "artifacts", "eval");
+if (args.Contains(AgentCases))
+{
+    await using var agentScope = host.Services.CreateAsyncScope();
+    return await agentScope.ServiceProvider.GetRequiredService<AgentEvaluationRunner>().RunAsync(
+        Path.Combine(repositoryRoot, AgentCaseSet.Folder),
+        Path.Combine(repositoryRoot, SyntheticSet.Folder, SyntheticSet.PassagesFile),
+        resultsFolder,
+        Console.Out);
 }
 
 var goldenSetPath = builder.Configuration["Evaluation:GoldenSetPath"];
@@ -45,7 +61,7 @@ return await scope.ServiceProvider.GetRequiredService<EvaluationRunner>().RunAsy
     goldenSetPath,
     builder.Configuration["Evaluation:JudgeModel"]!,
     args.Contains(RetrievalOnly),
-    Path.Combine(repositoryRoot, "artifacts", "eval"),
+    resultsFolder,
     Console.Out);
 
 // dotnet run starts in the project folder; the results and the synthetic set are relative to the repository root.
