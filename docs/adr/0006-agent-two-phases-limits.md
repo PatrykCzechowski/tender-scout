@@ -159,3 +159,25 @@ one reply, and they were not kept. So with this model the
 instructions alone do not make the agent wait for a result; a rule in the code for
 one call per reply, or another model, would be a new decision. The cap of 12 calls
 stays provisional: no run made more than 2.
+
+## Addition, 2026-11-14: the chat model may be hosted
+
+The decision, the prompts, the tools and the limits do not change. The chat model of
+both phases, and of `/ask`, can now also be a hosted one: `Chat:Provider` chooses
+Ollama (the default) or OpenRouter, through the OpenAI-compatible client of
+`Microsoft.Extensions.AI.OpenAI` behind the same `IChatClient`. The constraint
+"a run must end in bounded time on a local model" now reads "on the configured
+model"; the limits are the same for both.
+
+- **What changes with a hosted model.** The prompts, the tool descriptions, the
+  model's calls and every source a tool returns leave the machine. The key is read
+  only from `OPENROUTER_API_KEY`, and a missing key stops the start-up. A provider
+  error is a 503 like an unreachable Ollama; the client's own retries are switched
+  off, because each attempt is paid, and only the HTTP status of an error is kept.
+  The Ollama option `num_ctx` is not sent to the hosted model.
+- **What stays local.** The embeddings of the search and of the stored chunks.
+- **Measured.** The same 12 evaluation cases, run 3 times with
+  `openai/gpt-4.1-mini`, passed in 33 of 36 runs, against 24 of 36 for Bielik 11B
+  with the same prompts; the two-step cases in 9 of 12, against 0 of 12. The hosted
+  model searched the documents only after the notice search had answered. The
+  numbers and their limits are in the [README](../../README.md#evaluation).

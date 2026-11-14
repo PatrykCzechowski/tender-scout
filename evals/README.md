@@ -205,6 +205,19 @@ dotnet user-secrets --project src/TenderScout.Evaluation set "Agent:Model" "Spea
 dotnet run --project src/TenderScout.Evaluation -- --agent-cases
 ```
 
+With chat through OpenRouter (see the README), the same command runs the agent on the hosted model; the embeddings
+stay on Ollama. The key comes from the environment, so it is not stored with the other settings:
+
+```sh
+export Chat__Provider=OpenRouter Chat__Endpoint=https://openrouter.ai/api/v1
+export Chat__Model=openai/gpt-4.1-mini Agent__Model=openai/gpt-4.1-mini
+export OPENROUTER_API_KEY=<your OpenRouter key>   # or read it from your secret store in the same shell
+dotnet run --project src/TenderScout.Evaluation -- --agent-cases
+```
+
+Without the key the command stops before it loads the data. A run sends the invented cases, notices and passages to
+OpenRouter; a provider error ends the command like an unreachable Ollama, with an incomplete results file.
+
 It runs the same agent class as the API, in process, with the same tools, prompts, limits and model setting; only
 the date it is told is the reference date. `bge-m3` is needed too, for the vectors of the model's document queries.
 The command prints a table per case and an overall table and writes `artifacts/eval/agent-<UTC time>.json` with the
