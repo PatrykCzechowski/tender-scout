@@ -105,7 +105,11 @@ and one question took 77 seconds.
 - **The model sometimes fills arguments badly.** In the trial it used a parameter
   that does not exist, which is ignored, so that search ran without a filter; it
   counted "next week" a few days off; and after a rejected call it stopped instead
-  of correcting it. The first two give a wrong or wider result, not an error.
+  of correcting it. The first two give a wrong or wider result, not an error. Since
+  2026-11-14 the instructions state the dates of the week, and the one evaluation
+  case that asks for next week passes. They also tell the model to correct a
+  rejected call, but in the evaluation it still stopped after every rejection (see
+  the addition below).
 - **Arguments that are not readable JSON are listed as `null`,** because the
   framework does not pass on their text.
 - **`Microsoft.Extensions.AI` is a direct dependency** of `TenderScout.Infrastructure`.
@@ -113,3 +117,45 @@ and one question took 77 seconds.
   client and `AIFunctionFactory`.
 - **Not measured:** answers on real tender documents, the second candidate model,
   more than one request at a time, and how the answers change with other limits.
+
+## Addition, 2026-11-14: instructions for dependent calls, rejected calls and the week
+
+The decision and the limits above do not change. Only the instructions of the
+gathering phase changed, after the first run of the agent evaluation
+([README](../../README.md#evaluation)):
+
+- **The week.** Next to today's date the model gets the dates of this week and of
+  next week, Monday to Sunday, both ends included, from the same clock. Other
+  periods it still counts from today's date.
+- **Notice searches.** One or two distinctive words of the question, as word
+  beginnings without endings, because every word must occur in the title or the
+  buyer name. A CPV code only when the question gives one.
+- **Dependent calls.** When a question describes a tender by its name or buyer, the
+  model is told to search the notices first, wait for the result, and search the
+  documents in its next reply with the number from that result. A call that needs a
+  value from another call's result is made only when the result is there, never
+  with a placeholder or a guess.
+- **Rejected calls.** When a tool answers that a parameter is wrong, the model is
+  told to read the message and call again with the corrected value: a rejected call
+  is not an empty result and not a reason to finish.
+
+The instructions name no limit, and the code has no rule about which calls of a
+reply are run: a document search sent too early is still run, rejected by the tool
+and listed as failed.
+
+| Evaluation run, 12 cases, 3 runs each | Cases passed | Two-step cases | Cases that passed before | "Next week" case |
+| --- | --- | --- | --- | --- |
+| 2026-11-13, `80c2249`, before the change | 21 of 36 | 0 of 12 | 21 of 21 | 0 of 3 |
+| 2026-11-14, `2736bf6`, after the change | 24 of 36 | 0 of 12 | 21 of 21 | 3 of 3 |
+
+Same model, data, reference date and limits in both runs. The "next week" case now
+passes, and the notice search of the two-step cases has the expected arguments in
+12 of 12 runs, against 6 of 12 before. The dependent call did not change: in all 12
+runs of the two-step cases the document search still carried a placeholder for the
+number, so it was written before the result of the notice search had come, and the
+model stopped after the rejection. Stricter wordings, among them one tool call per
+reply, were tried on other invented questions; the model still sent both calls in
+one reply, and they were not kept. So with this model the
+instructions alone do not make the agent wait for a result; a rule in the code for
+one call per reply, or another model, would be a new decision. The cap of 12 calls
+stays provisional: no run made more than 2.
