@@ -23,7 +23,7 @@ jobs:
     # Own pushes and same-repo PRs run on the self-hosted Raspberry Pi runner.
     # Fork PRs run on GitHub-hosted runners so untrusted code never reaches the Pi.
     runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "raspberry-pi"]') || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
@@ -52,7 +52,24 @@ jobs:
         run: dotnet build TenderScout.slnx --configuration Release --no-restore -warnaserror
 
       - name: Test
-        run: dotnet test --solution TenderScout.slnx --configuration Release --no-build
+        # Temporary (#52): the full test command 20 times in a row on the same binaries, with the duration of every
+        # test of the document consumer class. A later commit restores the single run.
+        run: |
+          failed=0
+          for i in $(seq 1 20); do
+            start=$(date +%s)
+            if dotnet test --solution TenderScout.slnx --configuration Release --no-build -- --report-xunit-trx --results-directory "$RUNNER_TEMP/run-$i" > "$RUNNER_TEMP/run-$i.log" 2>&1; then
+              echo "run $i: passed in $(( $(date +%s) - start )) s"
+            else
+              failed=$((failed + 1))
+              echo "run $i: FAILED in $(( $(date +%s) - start )) s"
+              sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/run-$i.log" | grep -E -A6 '^ *failed ' | head -80
+            fi
+            grep -h -o '<UnitTestResult testName="[^"]*DocumentUploadedConsumerTests[^"]*" outcome="[A-Za-z]*"[^>]*duration="[0-9:.]*"' "$RUNNER_TEMP"/run-$i/*.trx \
+              | sed -E 's/.*DocumentUploadedConsumerTests\.([^"]*)" outcome="([A-Za-z]*)".*duration="([0-9:.]*)"/  \3 \2 \1/' | sort
+          done
+          echo "failed runs: $failed of 20"
+          test "$failed" -eq 0
 
       - name: Verify formatting
         run: dotnet format TenderScout.slnx --verify-no-changes --no-restore --verbosity diagnostic
