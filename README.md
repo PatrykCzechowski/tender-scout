@@ -150,7 +150,8 @@ model answer only from them. When no passage is close enough, or the model cites
 the refusal rule are in [ADR-0004](docs/adr/0004-answers-bielik-citations-refusal.md). It needs a token with the scope
 `documents:ask`; see [Authentication](#authentication).
 
-The API needs both models on Ollama, which may run on different machines:
+The API needs both models on Ollama, which may run on different machines (the chat model may instead be hosted, see
+[Chat through OpenRouter](#chat-through-openrouter)):
 
 ```sh
 ollama pull SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0
@@ -341,6 +342,40 @@ found until then:
 With the model above on a GPU with 8 GB of memory a question takes 10 to 45 seconds. The endpoint needs a token with
 the scope `documents:ask`, like `/ask`; the agent's own tool calls are not checked against the caller's scopes.
 
+### Chat through OpenRouter
+
+The chat model can also be a hosted one, through [OpenRouter](https://openrouter.ai) and its OpenAI-compatible API.
+`Chat:Provider` chooses it for `/ask`, for both phases of `/agent` and for the evaluation command; there is no switch
+per endpoint. Ollama stays the default, and the only choice that keeps every question and passage on your machines.
+The embeddings stay on Ollama either way: the stored vectors and the query vectors of the search are `bge-m3`, so
+document search still needs the Ollama server. Nothing is re-embedded when the provider changes.
+
+The key is read from `OPENROUTER_API_KEY`, a user secret or an environment variable of that exact name; there is no
+other place for it. With OpenRouter chosen and no key the API stops before it listens, and the evaluation command
+stops before it loads anything, both naming `OPENROUTER_API_KEY`. The key is only sent to OpenRouter, never logged,
+and never put in an image; the incoming bearer token of a caller is not passed on.
+
+```sh
+dotnet user-secrets --project src/TenderScout.Api set "Chat:Provider" "OpenRouter"
+dotnet user-secrets --project src/TenderScout.Api set "Chat:Endpoint" "https://openrouter.ai/api/v1"
+dotnet user-secrets --project src/TenderScout.Api set "Chat:Model" "openai/gpt-4.1-mini"
+dotnet user-secrets --project src/TenderScout.Api set "Agent:Model" "openai/gpt-4.1-mini"
+dotnet user-secrets --project src/TenderScout.Api set "OPENROUTER_API_KEY" "<your OpenRouter key>"
+dotnet user-secrets --project src/TenderScout.Api set "Embedding:Endpoint" "http://<ollama-host>:11434"
+```
+
+Both model settings are needed: `/ask` uses `Chat:Model` and the agent `Agent:Model`, as with Ollama. A provider that
+cannot be reached, a rejected key, no credit or a rate limit gives the same 503 as an unreachable Ollama, with the
+HTTP status in the log and nothing of the provider's answer. A failed request is not repeated, because each attempt is
+paid. Requests are limited by `Chat:RequestTimeout` as before.
+
+**What leaves the machine with OpenRouter chosen.** OpenRouter, and the company that runs the model behind it, receive
+the question, the instructions of the prompts with today's date, the names, descriptions and parameters of the tools,
+the model's own calls and the whole conversation of a run, the notices and passages the tools return, and for `/ask`
+the five passages it answers from. They do not receive the PDF files, vectors, database credentials or the caller's
+token. Nothing checks that the data are invented; so far only invented data have been sent, and the service must
+not be pointed at real tender documents with this setting until that is decided.
+
 ### Evaluation
 
 `dotnet run --project src/TenderScout.Evaluation` measures search and answers on a private golden set of questions
@@ -468,6 +503,50 @@ The second run:
   not in the code.
 - The three runs of a case scored the same in this run too.
 
+**A hosted model on the same cases.** One run on 2026-11-14 from commit `f1a0795`, with chat through OpenRouter and
+`openai/gpt-4.1-mini` as `Agent:Model`. Everything else was the same as in the second local run: the 12 cases with
+their expected calls, the invented notices and passages with their stored vectors (same SHA-256 sums), reference date
+2026-12-07, `bge-m3` on the same Ollama server (0.40.16) for the query vectors, the prompts and tool descriptions as
+they are after the change above, temperature 0, at most 512 tokens a reply, the limits of 4 requests, 12 tool calls
+and 120 seconds, and 3 runs a case on an empty database. The run was complete and no case run ended with an error.
+It is the only measured hosted run.
+
+| Number | Local: 2026-11-14, `2736bf6`, Bielik 11B v3 `Q4_K_M` | Hosted: 2026-11-14, `f1a0795`, `openai/gpt-4.1-mini` |
+| --- | ---: | ---: |
+| Expected tool chosen | 1.00 (42/42) | 0.93 (39/42) |
+| Arguments matched | 0.71 (30/42) | 0.93 (39/42) |
+| Cases passed | 0.67 (24/36) | 0.92 (33/36) |
+| Cases passed per run, least-most | 0.67-0.67 | 0.92-0.92 |
+| Steps per case run: mean, least, most | 1.17, 0, 2 | 1.08, 0, 2 |
+| Any gathering limit (case runs) | 0 | 0 |
+| Runs at the call cap of 12, at most | 0 | 0 |
+| Unexpected calls (of them to tools that do not exist) | 0 (0) | 0 (0) |
+| Failed calls | 12 | 0 |
+| Most tool calls in a run (cap 12) | 2 | 2 |
+| Errored case runs | 0 | 0 |
+| Runs passed, the four cases that need a notice search and then a document search | 0 of 12 | 9 of 12 |
+| Runs passed, the seven cases that passed in the first run | 21 of 21 | 21 of 21 |
+| Runs passed, "next week" | 3 of 3 | 3 of 3 |
+
+The first local run of 2026-11-13 (21 of 36) is above; the column here is the latest local result.
+
+- **The hosted model waited for the notice before it searched the documents.** In 9 of the 12 runs of the two-step
+  cases it searched the notices, read the publication number from the result and searched that tender's documents in
+  its next reply, without a placeholder and without a failed call. The target of 9 of 12 that the local model missed
+  is reached on this model, with no case that passed before failing.
+- **The three misses are one case.** In all three runs of that case the model searched the notices with four words of
+  the question; a notice search needs every word in the title or the buyer, found nothing, and the agent refused
+  without searching the documents. The scoring counts the missing document search as a missed tool and a missed
+  argument, which is why "expected tool chosen" is lower than for the local model.
+- **The runs of a case scored the same.** In two cases the calls differed between runs (an optional `limit`, the
+  words of a notice search); no score changed.
+- **What this does not show.** The prompts were tuned on the local model; the cases are 12 invented ones, run 3 times;
+  the scores are of the tool calls, not of the answers; the hosted model has a far larger context and another
+  tokenizer, and OpenRouter may serve it from more than one upstream provider. It is no ranking of the two models in
+  general, and the cap of 12 tool calls is still not confirmed: no run made more than 2.
+- **Cost.** The run made about 100 requests to the model and cost about USD 0.04 by OpenRouter's usage of the key;
+  the whole change, with the trials, about USD 0.06.
+
 CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
 that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
 fusion and the stop-word list:
@@ -491,8 +570,10 @@ fusion and the stop-word list:
 | `Embedding:Model` | `bge-m3` | Worker, search, API, MCP server | Model name, stored with every vector |
 | `Embedding:BatchSize` | `32` | Worker | Chunks per request; each batch is saved separately |
 | `Embedding:RequestTimeout` | `00:02:00` | Worker, search, API, MCP server | Time limit of one attempt |
-| `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model |
-| `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
+| `Chat:Provider` | `Ollama` | API, evaluation | `Ollama` or `OpenRouter`, for `/ask`, `/agent` and the evaluation; see [Chat through OpenRouter](#chat-through-openrouter) |
+| `Chat:Endpoint` | `http://localhost:11434` | API, evaluation | Address of the Ollama server with the chat model, or `https://openrouter.ai/api/v1` |
+| `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers of `/ask` |
+| `OPENROUTER_API_KEY` | none; required with `OpenRouter` | API, evaluation | The OpenRouter key, as a user secret or an environment variable only |
 | `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of one request to the chat model |
 | `Agent:Model` | none; `/agent` answers 503 without it | API, evaluation | Chat model of the agent; it must be able to call tools |
 | `Authentication:Schemes:Bearer:Authority` | none, required; set by the AppHost | API, MCP server | Address of the token issuer |
@@ -536,7 +617,7 @@ the published output only, run as the user `app` and not as root, and the API an
 | Image | Must be set | May be set |
 | --- | --- | --- |
 | `tender-scout-migrations` | `ConnectionStrings__tenderscout`, for a role that may create the `vector` extension | |
-| `tender-scout-api` | `ConnectionStrings__tenderscout`, `Authentication__Schemes__Bearer__Authority`, `Authentication__Schemes__Bearer__ValidAudiences__0` | `WebSignIn__ClientId`, `Embedding__Endpoint`, `Chat__Endpoint`, `Agent__Model`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `tender-scout-api` | `ConnectionStrings__tenderscout`, `Authentication__Schemes__Bearer__Authority`, `Authentication__Schemes__Bearer__ValidAudiences__0` | `WebSignIn__ClientId`, `Embedding__Endpoint`, `Chat__Provider`, `Chat__Endpoint`, `Chat__Model`, `Agent__Model`, `OPENROUTER_API_KEY`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `tender-scout-mcp` | `ConnectionStrings__tenderscout`, `Authentication__Schemes__Bearer__Authority`, `Authentication__Schemes__Bearer__ValidAudiences__0` | `Embedding__Endpoint`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `tender-scout-worker` | `ConnectionStrings__tenderscout`, `ConnectionStrings__messaging` (the RabbitMQ address as a URI) | `Embedding__Endpoint`, `Ingestion__*`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 
@@ -549,7 +630,9 @@ docker run --init --publish 8080:8080 --env "ConnectionStrings__tenderscout=<con
   --env "Authentication__Schemes__Bearer__ValidAudiences__0=<audience>" tender-scout-api
 ```
 
-The API then serves the page at `http://localhost:8080/` and answers `/health`.
+The API then serves the page at `http://localhost:8080/` and answers `/health`. For hosted chat, add the settings of
+[Chat through OpenRouter](#chat-through-openrouter) with `--env`, and pass the key by name from your shell, as
+`--env OPENROUTER_API_KEY`, so that its value is not written in the command. Only the API needs it.
 
 - **The issuer address is the one in the tokens.** A container reaches the issuer under that same address, or the
   tokens are refused; for an issuer over HTTP add `Authentication__Schemes__Bearer__RequireHttpsMetadata=false`.

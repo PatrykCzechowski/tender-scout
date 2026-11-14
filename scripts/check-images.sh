@@ -169,6 +169,19 @@ wait_for_exit "$run-worker" 60
 [ "$code" != 0 ] || fail "the worker ended with code 0 without a broker" "$run-worker"
 docker logs "$run-worker" 2>&1 | grep --quiet messaging || fail "the worker did not name the missing connection string" "$run-worker"
 
+echo "== Hosted chat without its key"
+# With OpenRouter chosen and no OPENROUTER_API_KEY the API must stop before it listens and name the setting. It
+# sends nothing anywhere, and no key exists in this check.
+# shellcheck disable=SC2086
+docker run --detach $init --name "$run-api-hosted" --network "$run" --env "$database" "${issuer[@]}" \
+    --env Chat__Provider=OpenRouter --env Chat__Endpoint=https://openrouter.ai/api/v1 --env Chat__Model=openai/gpt-4.1-mini \
+    tender-scout-api >/dev/null
+wait_for_exit "$run-api-hosted" 60
+[ "$code" != 0 ] || fail "the API ended with code 0 with OpenRouter and no key" "$run-api-hosted"
+# Read whole: grep --quiet would end the pipe early, and with pipefail that counts as a failure.
+hosted_logs=$(docker logs "$run-api-hosted" 2>&1)
+[[ "$hosted_logs" == *OPENROUTER_API_KEY* ]] || fail "the API did not name OPENROUTER_API_KEY" "$run-api-hosted"
+
 echo "== Health without the database"
 # The health check goes through the retry policy of the database connection, so it answers after about a minute.
 docker stop "$run-db" >/dev/null

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 using TenderScout.Evaluation;
 using TenderScout.Infrastructure.Agent;
 using TenderScout.Infrastructure.Answering;
@@ -36,6 +37,18 @@ if (args.Contains(WriteFixture))
 {
     await SyntheticSet.WriteVectorsAsync(host.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(), repositoryRoot, CancellationToken.None);
     return 0;
+}
+
+// The host is never started, so its check of the settings has to be asked for: a missing key or model stops the
+// command here, before it loads data or calls a model.
+try
+{
+    host.Services.GetRequiredService<IStartupValidator>().Validate();
+}
+catch (Exception exception) when (exception is OptionsValidationException or AggregateException)
+{
+    Console.Error.WriteLine(exception.Message);
+    return 1;
 }
 
 var resultsFolder = Path.Combine(repositoryRoot, "artifacts", "eval");
