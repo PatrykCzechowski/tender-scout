@@ -23,6 +23,7 @@
     <None Include="Evaluation\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\evals\agent\*" Link="Evaluation\agent\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Tools\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\keycloak\*.json" Link="Security\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
