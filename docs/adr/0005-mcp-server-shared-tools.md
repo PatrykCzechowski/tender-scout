@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-11-13
+Accepted — 2026-11-13. Amended 2026-11-14: the server requires a bearer token and each
+tool a scope, see [ADR-0008](0008-bearer-tokens-and-scopes.md).
 
 ## Context
 
@@ -56,8 +57,9 @@ the same tool must not exist in two versions for the MCP server and for the agen
   no internal detail and is logged on the server. An unknown tool is a protocol error.
 - **Limits, defaults and the path are constants.** The tools add no retries, time
   limits or cache.
-- **No authentication yet.** The server is for the development machine until
-  authentication and scopes per tool are added.
+- **Authentication (amended 2026-11-14).** Every request to `/mcp` needs a bearer token
+  and each tool names the scope it requires, see ADR-0008. Before that the server
+  was for the development machine only.
 
 ## Consequences
 

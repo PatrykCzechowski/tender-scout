@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-11-14
+Accepted — 2026-11-14. Amended 2026-11-14: the API and the MCP server also need the
+issuer and the audience of their tokens, see [ADR-0008](0008-bearer-tokens-and-scopes.md).
 
 ## Context
 

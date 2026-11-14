@@ -86,13 +86,69 @@ dotnet run --project src/TenderScout.DocumentSearch -- "Jaka jest wysokość wad
 
 It exits with a non-zero code when the question is missing or Ollama cannot be reached.
 
+### Authentication
+
+The API and the MCP server serve data only to a request with a JWT bearer token of the configured issuer, and each
+endpoint and tool requires one of two scopes. For local runs the AppHost starts [Keycloak](https://www.keycloak.org)
+with the realm of `keycloak/tender-scout-realm.json`. The decisions are in
+[ADR-0008](docs/adr/0008-bearer-tokens-and-scopes.md).
+
+| Route or tool | Scope |
+| --- | --- |
+| `GET /notices`; MCP tools `search_notices` and `get_notice` | `notices:read` |
+| `POST /ask`, `POST /agent`; MCP tool `search_tender_documents` | `documents:ask` |
+| `/mcp` itself | either one |
+| `/health`, `/alive`, the files of the web page, `/openapi/v1.json`, `/scalar` (Development), `/sign-in-settings` | none |
+
+A request without a token, or with one that is expired, wrongly signed or made for another issuer or audience, gets
+401 with `WWW-Authenticate: Bearer`. A valid token without the scope gets 403. An MCP client with one scope sees and
+can call only the tools of that scope.
+
+Get a token for the machine client from the local Keycloak, with one scope or both, and call the API with it:
+
+```sh
+TOKEN=$(curl -s http://localhost:8180/realms/tender-scout/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=tender-scout-machine \
+  -d client_secret=local-only-machine-secret -d "scope=notices:read documents:ask" \
+  | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5150/notices
+```
+
+A token lasts 5 minutes. The examples in the sections below send `$TOKEN`.
+
+- **The realm is for local use only.** It has a public client for the web page (`tender-scout-web`, authorization
+  code with PKCE), the machine client above and one test user, `tester` with the password `local-only-password`. The
+  user, its password and the secret of the machine client are invented and written in the realm file. They protect
+  only a Keycloak on a development machine: do not use them, or this realm file, anywhere else.
+- **Keycloak** listens at `http://localhost:8180` and its admin console is at `http://localhost:8180/admin`, user
+  `admin`. The admin password is not in the repository: the AppHost generates it on its first start and keeps it in
+  its user secrets, under `Parameters:keycloak-admin-password` in the output of
+  `dotnet user-secrets list --project src/TenderScout.AppHost`. Keycloak keeps nothing between starts, so a change of
+  the realm file takes effect on the next start of the AppHost.
+- **The evaluation and the document search command need no token.** They run the search and the agent in process
+  and call no endpoint.
+
+The services know nothing about Keycloak. They read the issuer and the audience from settings, so another identity
+provider needs other values and no change of the code:
+
+| Key | Meaning |
+| --- | --- |
+| `Authentication:Schemes:Bearer:Authority` | Address of the issuer, exactly as it is written in the tokens; the signing keys are read from its metadata |
+| `Authentication:Schemes:Bearer:ValidAudiences:0` | The audience a token must have |
+| `Authentication:Schemes:Bearer:RequireHttpsMetadata` | `false` only for a local issuer that speaks HTTP |
+| `WebSignIn:ClientId` | API only: the client the web page signs in with |
+
+The AppHost sets them for local runs. A service without the first two does not start and names the missing setting,
+and no setting switches the checks off. The scopes are read from the `scope` claim; a provider that writes them
+elsewhere, as Entra ID does with `scp`, needs a mapping at the provider or a change of one line.
+
 ### Asking questions
 
 `POST /ask` answers a question from the stored documents, with the document and page of every passage the answer is
 based on. It embeds the question with `bge-m3`, takes the five best passages from hybrid search and lets the chat
 model answer only from them. When no passage is close enough, or the model cites none, it refuses. The prompt and
-the refusal rule are in [ADR-0004](docs/adr/0004-answers-bielik-citations-refusal.md). The endpoint has no
-authentication yet; keep it on the development machine.
+the refusal rule are in [ADR-0004](docs/adr/0004-answers-bielik-citations-refusal.md). It needs a token with the scope
+`documents:ask`; see [Authentication](#authentication).
 
 The API needs both models on Ollama, which may run on different machines:
 
@@ -106,7 +162,7 @@ Start the AppHost and use the address of the `api` resource from the dashboard. 
 limits the search to one tender:
 
 ```sh
-curl -X POST http://<api-host>/ask -H "Content-Type: application/json" \
+curl -X POST http://<api-host>/ask -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"question": "Jaka jest wysokość wadium?", "publicationNumber": "123456-2026"}'
 ```
 
@@ -141,7 +197,7 @@ takes the filters of the `search_notices` tool, with the same rules, plus a docu
 | `limit` | 1 to 200; 50 when not given |
 
 ```sh
-curl "http://<api-host>/notices?cpvPrefix=72&deadlineFrom=2026-12-01&limit=20"
+curl -H "Authorization: Bearer $TOKEN" "http://<api-host>/notices?cpvPrefix=72&deadlineFrom=2026-12-01&limit=20"
 ```
 
 The reply is `{ "total": n, "notices": [...] }`: `total` counts every matching notice whatever the limit, and each
@@ -199,18 +255,22 @@ To try the tools, connect [MCP Inspector](https://modelcontextprotocol.io/docs/t
 Node.js 22.19 or newer:
 
 ```sh
-npx @modelcontextprotocol/inspector --server-url http://<mcp-host>/mcp --transport http
+npx @modelcontextprotocol/inspector --server-url http://<mcp-host>/mcp --transport http \
+  --header "Authorization: Bearer $TOKEN"
 ```
 
 Or call a tool from the shell. A value made of digits must be quoted as JSON, or the Inspector sends it as a number:
 
 ```sh
-npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http --method tools/list
 npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http \
+  --header "Authorization: Bearer $TOKEN" --method tools/list
+npx @modelcontextprotocol/inspector --cli http://<mcp-host>/mcp --transport http \
+  --header "Authorization: Bearer $TOKEN" \
   --method tools/call --tool-name search_notices --tool-arg 'cpvPrefix="72"' --tool-arg limit=5
 ```
 
-The server has no authentication yet. Keep it on the development machine.
+Every request to `/mcp` needs a token, and each tool the scope of its data; see
+[Authentication](#authentication). The server offers no OAuth discovery, so a client is given the token as a header.
 
 ### Agent
 
@@ -229,7 +289,7 @@ dotnet user-secrets --project src/TenderScout.Api set "Agent:Model" "SpeakLeash/
 ```
 
 ```sh
-curl -X POST http://<api-host>/agent -H "Content-Type: application/json" \
+curl -X POST http://<api-host>/agent -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"question": "Jakie wadium trzeba wnieść w przetargu na serwery dla urzędu gminy?"}'
 ```
 
@@ -269,8 +329,8 @@ found until then:
 | Time for gathering | 120 seconds |
 | Sources given to the answering call | the first 25 notices and the first 12 passages |
 
-With the model above on a GPU with 8 GB of memory a question takes 10 to 45 seconds. The endpoint has no
-authentication yet; keep it on the development machine.
+With the model above on a GPU with 8 GB of memory a question takes 10 to 45 seconds. The endpoint needs a token with
+the scope `documents:ask`, like `/ask`; the agent's own tool calls are not checked against the caller's scopes.
 
 ### Evaluation
 
@@ -394,6 +454,10 @@ fusion and the stop-word list:
 | `Chat:Model` | `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | API, evaluation | Chat model that writes the answers |
 | `Chat:RequestTimeout` | `00:01:30` | API, evaluation | Time limit of one request to the chat model |
 | `Agent:Model` | none; `/agent` answers 503 without it | API, evaluation | Chat model of the agent; it must be able to call tools |
+| `Authentication:Schemes:Bearer:Authority` | none, required; set by the AppHost | API, MCP server | Address of the token issuer |
+| `Authentication:Schemes:Bearer:ValidAudiences:0` | none, required; set by the AppHost | API, MCP server | The audience a token must have |
+| `Authentication:Schemes:Bearer:RequireHttpsMetadata` | `true` | API, MCP server | `false` only for a local issuer that speaks HTTP |
+| `WebSignIn:ClientId` | none; set by the AppHost | API | The client the web page signs in with |
 | `Evaluation:GoldenSetPath` | none, required | evaluation | The golden set JSONL file |
 | `Evaluation:JudgeModel` | `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | evaluation | Model that judges the answers |
 
@@ -431,18 +495,23 @@ the published output only, run as the user `app` and not as root, and the API an
 | Image | Must be set | May be set |
 | --- | --- | --- |
 | `tender-scout-migrations` | `ConnectionStrings__tenderscout`, for a role that may create the `vector` extension | |
-| `tender-scout-api` | `ConnectionStrings__tenderscout` | `Embedding__Endpoint`, `Chat__Endpoint`, `Agent__Model`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| `tender-scout-mcp` | `ConnectionStrings__tenderscout` | `Embedding__Endpoint`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `tender-scout-api` | `ConnectionStrings__tenderscout`, `Authentication__Schemes__Bearer__Authority`, `Authentication__Schemes__Bearer__ValidAudiences__0` | `WebSignIn__ClientId`, `Embedding__Endpoint`, `Chat__Endpoint`, `Agent__Model`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `tender-scout-mcp` | `ConnectionStrings__tenderscout`, `Authentication__Schemes__Bearer__Authority`, `Authentication__Schemes__Bearer__ValidAudiences__0` | `Embedding__Endpoint`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `tender-scout-worker` | `ConnectionStrings__tenderscout`, `ConnectionStrings__messaging` (the RabbitMQ address as a URI) | `Embedding__Endpoint`, `Ingestion__*`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
 
 Run the migrations first and once. The other three expect the migrated schema and do not wait for it:
 
 ```sh
 docker run --rm --env "ConnectionStrings__tenderscout=<connection string>" tender-scout-migrations
-docker run --init --publish 8080:8080 --env "ConnectionStrings__tenderscout=<connection string>" tender-scout-api
+docker run --init --publish 8080:8080 --env "ConnectionStrings__tenderscout=<connection string>" \
+  --env "Authentication__Schemes__Bearer__Authority=<issuer address>" \
+  --env "Authentication__Schemes__Bearer__ValidAudiences__0=<audience>" tender-scout-api
 ```
 
 The API then serves the page at `http://localhost:8080/` and answers `/health`.
+
+- **The issuer address is the one in the tokens.** A container reaches the issuer under that same address, or the
+  tokens are refused; for an issuer over HTTP add `Authentication__Schemes__Bearer__RequireHttpsMetadata=false`.
 
 - **No model is needed to start.** Without a model address the API and the MCP server are healthy, and the page,
   `/notices` and the notice tools work. `/ask` and `/agent` answer 503, and the document search tool reports that the
@@ -456,11 +525,12 @@ The API then serves the page at `http://localhost:8080/` and answers `/health`.
 - **`/health` follows the database slowly.** It connects to the database, and when the database is gone it answers
   503 only after about a minute, because the check goes through the retry policy of the connection.
 
-`scripts/check-images.sh` builds the four images and checks them against a throwaway PostgreSQL, without a model:
-the user, that no SDK, source or local settings file is inside, the time zone data, the migrations on an empty
-database and a second time, `/health`, the page and `/notices`, and that `POST /agent` resolves `Europe/Warsaw`. It
-needs Docker and curl, takes about three minutes and removes its containers afterwards; the images stay. CI runs it
-on every pull request and pushes nothing.
+`scripts/check-images.sh` builds the four images and checks them against a throwaway PostgreSQL and a Keycloak with
+the realm file of the repository, without a model: the user, that no SDK, source or local settings file is inside,
+the time zone data, the migrations on an empty database and a second time, `/health`, the page, 401 without a token,
+`/notices` and the MCP server with a token of that realm, and that `POST /agent` resolves `Europe/Warsaw`. It needs
+Docker and curl, takes about three minutes and removes its containers afterwards; the images stay. CI runs it on
+every pull request and pushes nothing.
 
 Not there yet: a registry, a compose file and a deployment.
 
