@@ -120,6 +120,24 @@ public sealed class AgentSourcesTests(PostgresFixture database)
         Assert.Contains(expected, agent.Chat.Requests[0].Messages[0].Text, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("2027-03-01T08:00:00Z", "ten tydzień to 2027-03-01 – 2027-03-07, a przyszły tydzień to 2027-03-08 – 2027-03-14")]
+    [InlineData("2027-03-03T08:00:00Z", "ten tydzień to 2027-03-01 – 2027-03-07, a przyszły tydzień to 2027-03-08 – 2027-03-14")]
+    [InlineData("2027-03-07T08:00:00Z", "ten tydzień to 2027-03-01 – 2027-03-07, a przyszły tydzień to 2027-03-08 – 2027-03-14")]
+    [InlineData("2027-03-07T23:30:00Z", "ten tydzień to 2027-03-08 – 2027-03-14, a przyszły tydzień to 2027-03-15 – 2027-03-21")]
+    [InlineData("2027-06-27T22:30:00Z", "ten tydzień to 2027-06-28 – 2027-07-04, a przyszły tydzień to 2027-07-05 – 2027-07-11")]
+    [InlineData("2026-12-30T08:00:00Z", "ten tydzień to 2026-12-28 – 2027-01-03, a przyszły tydzień to 2027-01-04 – 2027-01-10")]
+    public async Task ThisWeekAndNextWeek_AreGivenToTheGatheringModel_FromMondayToSundayInPoland(string utcNow, string expected)
+    {
+        await using var agent = new AgentTestHost(database.ConnectionString);
+        agent.Clock.SetUtcNow(DateTimeOffset.Parse(utcNow, System.Globalization.CultureInfo.InvariantCulture));
+        agent.Chat.Text();
+
+        await agent.AskAsync();
+
+        Assert.Contains(expected, agent.Chat.Requests[0].Messages[0].Text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task BothPhases_UseTheAgentModelAtTemperatureZero_AndOnlyGatheringHasTools()
     {

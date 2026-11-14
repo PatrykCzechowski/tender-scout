@@ -42,14 +42,21 @@ public sealed partial class TenderAgent(
     /// <summary>What the model is told when a tool fails for a reason that is not its arguments.</summary>
     internal const string ToolFailure = "The tool failed. Call another tool or stop.";
 
-    /// <summary>{0} is today's date in Poland, {1} its day of the week.</summary>
+    /// <summary>
+    /// {0} is today's date in Poland and {1} its day of the week; {2} and {3} are the Monday and Sunday of this week,
+    /// {4} and {5} those of next week.
+    /// </summary>
     internal const string GatheringPrompt = """
         Zbierasz informacje potrzebne do odpowiedzi na pytanie o polskie zamówienia publiczne.
-        Dzisiaj jest {0} ({1}). Daty i okresy z pytania, na przykład "w przyszłym tygodniu", licz od tej daty.
+        Dzisiaj jest {0:yyyy-MM-dd} ({1}). Tydzień trwa od poniedziałku do niedzieli: ten tydzień to {2:yyyy-MM-dd} – {3:yyyy-MM-dd}, a przyszły tydzień to {4:yyyy-MM-dd} – {5:yyyy-MM-dd}, oba dni graniczne włącznie. Pozostałe daty i okresy z pytania licz od dzisiejszej daty.
         Używaj narzędzi, żeby znaleźć ogłoszenia i fragmenty dokumentów przetargowych:
         - Zapytania pisz po polsku, krótko, samymi słowami kluczowymi, bez numeru ogłoszenia.
+        - Ogłoszeń szukaj jednym lub dwoma najbardziej charakterystycznymi słowami z pytania. Każde słowo zapytania musi wystąpić w tytule ogłoszenia albo w nazwie zamawiającego, także wewnątrz dłuższego słowa, więc podawaj początek słowa bez końcówki: "podręcznik" znajdzie też "podręczniki" i "podręczników".
+        - Kod CPV podawaj tylko wtedy, gdy pytanie go podaje. Nigdy go nie wymyślaj.
         - Numer ogłoszenia z pytania, na przykład 123456-2026, przekaż w parametrze publicationNumber.
-        - Gdy pytanie opisuje przetarg nazwą lub zamawiającym, najpierw znajdź jego ogłoszenie, a potem szukaj w dokumentach z jego numerem.
+        - Gdy pytanie opisuje przetarg nazwą lub zamawiającym, najpierw znajdź jego ogłoszenie i poczekaj na wynik. Dopiero w następnej odpowiedzi szukaj w dokumentach, z numerem ogłoszenia odczytanym z tego wyniku.
+        - Wywołanie, które potrzebuje wartości z wyniku innego wywołania, zrób dopiero wtedy, gdy ten wynik już masz. Nigdy nie wpisuj w parametr opisu, tekstu zastępczego ani zgadywanej wartości.
+        - Gdy narzędzie odpowie, że parametr jest błędny, przeczytaj komunikat i wywołaj narzędzie jeszcze raz z poprawioną wartością. Odrzucone wywołanie to nie to samo co brak wyników i nie jest powodem, żeby kończyć.
         - Używaj tylko parametrów opisanych w narzędziu. Nie podawaj parametru limit, jeśli pytanie nie prosi o konkretną liczbę wyników.
         Nie odpowiadaj na pytanie z własnej wiedzy: odpowiedź powstanie w następnym kroku wyłącznie z wyników narzędzi.
         Gdy masz już to, czego wymaga pytanie, albo narzędzia nic nie znajdują, napisz jedno słowo: GOTOWE.
@@ -105,12 +112,13 @@ public sealed partial class TenderAgent(
     /// <summary>Lets the model call tools until it stops asking, or until a limit ends the gathering.</summary>
     private async Task GatherAsync(string question, Run run, CancellationToken cancellationToken)
     {
-        var today = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), Poland);
-        List<ChatMessage> messages =
-        [
-            new(ChatRole.System, string.Format(CultureInfo.InvariantCulture, GatheringPrompt, today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DaysOfWeek[(int)today.DayOfWeek])),
-            new(ChatRole.User, question),
-        ];
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), Poland).DateTime);
+
+        // The model is given the dates of this week and the next, so it does not have to count them.
+        var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        var instructions = string.Format(
+            CultureInfo.InvariantCulture, GatheringPrompt, today, DaysOfWeek[(int)today.DayOfWeek], monday, monday.AddDays(6), monday.AddDays(7), monday.AddDays(13));
+        List<ChatMessage> messages = [new(ChatRole.System, instructions), new(ChatRole.User, question)];
         var chatOptions = new ChatOptions
         {
             ModelId = options.Value.Model,
