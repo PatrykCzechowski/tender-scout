@@ -443,6 +443,59 @@ Run on 2026-11-09 with the manifest of 68 rows, of which the 31 main tender spec
 The 27 indexed documents gave 3512 chunks. Starting from empty tables, the queue embedded all 3512 with `bge-m3`.
 A second import changed nothing and sent no request to Ollama. The other 37 manifest rows (answers to bidders' questions and amendments) are ignored for now.
 
+## Container images
+
+The four services that get deployed build into container images from one `Dockerfile`: the API, the MCP server, the
+worker and the database migrations. Why it looks the way it does is in
+[ADR-0007](docs/adr/0007-container-images.md). Build each image from the repository root by naming its stage:
+
+```sh
+docker build --target api --tag tender-scout-api .
+docker build --target mcp --tag tender-scout-mcp .
+docker build --target worker --tag tender-scout-worker .
+docker build --target migrations --tag tender-scout-migrations .
+```
+
+The images are based on `mcr.microsoft.com/dotnet/aspnet:10.0`, which brings the time zone data and ICU. They hold
+the published output only, run as the user `app` and not as root, and the API and the MCP server listen on HTTP port
+8080. Settings are environment variables, with `__` in place of `:`; no setting is stored in an image.
+
+| Image | Must be set | May be set |
+| --- | --- | --- |
+| `tender-scout-migrations` | `ConnectionStrings__tenderscout`, for a role that may create the `vector` extension | |
+| `tender-scout-api` | `ConnectionStrings__tenderscout` | `Embedding__Endpoint`, `Chat__Endpoint`, `Agent__Model`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `tender-scout-mcp` | `ConnectionStrings__tenderscout` | `Embedding__Endpoint`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `tender-scout-worker` | `ConnectionStrings__tenderscout`, `ConnectionStrings__messaging` (the RabbitMQ address as a URI) | `Embedding__Endpoint`, `Ingestion__*`, `OTEL_EXPORTER_OTLP_ENDPOINT` |
+
+Run the migrations first and once. The other three expect the migrated schema and do not wait for it:
+
+```sh
+docker run --rm --env "ConnectionStrings__tenderscout=<connection string>" tender-scout-migrations
+docker run --init --publish 8080:8080 --env "ConnectionStrings__tenderscout=<connection string>" tender-scout-api
+```
+
+The API then serves the page at `http://localhost:8080/` and answers `/health`.
+
+- **No model is needed to start.** Without a model address the API and the MCP server are healthy, and the page,
+  `/notices` and the notice tools work. `/ask` and `/agent` answer 503, and the document search tool reports that the
+  model is unavailable.
+- **The worker ingests notices from TED as it is.** It reads a document from the path in its message, which is a path
+  on the machine that ran the import, so it processes documents only when that folder is mounted at the same path.
+- **`--init`.** With Docker Desktop on an Apple Silicon Mac, a worker started without its broker setting printed
+  the unhandled exception and then kept running. With `docker run --init`, which puts a small init process in
+  front, it ended. On the amd64 runner of CI it ends by itself. Other arm64 machines, such as a Raspberry Pi, were
+  not checked, and the cause is not established.
+- **`/health` follows the database slowly.** It connects to the database, and when the database is gone it answers
+  503 only after about a minute, because the check goes through the retry policy of the connection.
+
+`scripts/check-images.sh` builds the four images and checks them against a throwaway PostgreSQL, without a model:
+the user, that no SDK, source or local settings file is inside, the time zone data, the migrations on an empty
+database and a second time, `/health`, the page and `/notices`, and that `POST /agent` resolves `Europe/Warsaw`. It
+needs Docker and curl, takes about three minutes and removes its containers afterwards; the images stay. CI runs it
+on every pull request and pushes nothing.
+
+Not there yet: a registry, a compose file and a deployment.
+
 ## Architecture decisions
 
 Key technical decisions are recorded as ADRs in [`docs/adr`](docs/adr/README.md).
