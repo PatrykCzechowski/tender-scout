@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -54,18 +55,30 @@ public sealed partial class QuestionAnswerer(
 
     private static readonly AskResponse Refusal = new(true, RefusalMessage, []);
 
+    /// <summary>The application's own spans; the model calls have theirs from Microsoft.Extensions.AI.</summary>
+    private static readonly ActivitySource Telemetry = new("TenderScout");
+
     /// <exception cref="Exception">The embedding or chat model failed; see <see cref="IsUnavailable"/>.</exception>
     public async Task<AskResponse> AskAsync(string question, string? publicationNumber, CancellationToken cancellationToken)
     {
         var model = embeddingOptions.Value.Model;
-        var vector = await generator.GenerateVectorAsync(question, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var passages = await repository.HybridSearchAsync(question, vector, model, PassageCount, publicationNumber, cancellationToken)
-            .ConfigureAwait(false);
+        IReadOnlyList<ChunkSearchResult> passages;
+        double similarity;
 
-        // Fused scores depend only on rank, so relevance is judged by the cosine similarity of the nearest chunk.
-        // No nearest chunk when only the text side found passages, e.g. none embedded yet.
-        var nearest = await repository.SearchAsync(vector, model, 1, publicationNumber, cancellationToken).ConfigureAwait(false);
-        var similarity = nearest.Count > 0 ? nearest[0].Score : 0;
+        // One span for finding the sources: the question's vector and both searches. It holds no text of the question.
+        using (var retrieval = Telemetry.StartActivity("retrieval"))
+        {
+            retrieval?.SetTag("gen_ai.operation.name", "retrieval");
+            var vector = await generator.GenerateVectorAsync(question, cancellationToken: cancellationToken).ConfigureAwait(false);
+            passages = await repository.HybridSearchAsync(question, vector, model, PassageCount, publicationNumber, cancellationToken)
+                .ConfigureAwait(false);
+
+            // Fused scores depend only on rank, so relevance is judged by the cosine similarity of the nearest chunk.
+            // No nearest chunk when only the text side found passages, e.g. none embedded yet.
+            var nearest = await repository.SearchAsync(vector, model, 1, publicationNumber, cancellationToken).ConfigureAwait(false);
+            similarity = nearest.Count > 0 ? nearest[0].Score : 0;
+        }
+
         if (passages.Count == 0 || (similarity < MinSimilarity && !ContainsNumberFrom(question, passages)))
         {
             return Refusal;

@@ -17,6 +17,15 @@ public static class Extensions
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
 
+    /// <summary>Spans of the application's own code, such as the search of <c>/ask</c>.</summary>
+    private const string ApplicationSource = "TenderScout";
+
+    /// <summary>
+    /// Source and meter of Microsoft.Extensions.AI 10.11: model calls, tool executions, operation duration and tokens,
+    /// following the GenAI semantic conventions v1.41.
+    /// </summary>
+    private const string GenAiSource = "Experimental.Microsoft.Extensions.AI";
+
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder)
         where TBuilder : IHostApplicationBuilder
     {
@@ -46,9 +55,13 @@ public static class Extensions
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation())
+                .AddRuntimeInstrumentation()
+                .AddMeter(GenAiSource))
             .WithTracing(tracing => tracing
                 .AddSource(builder.Environment.ApplicationName)
+                .AddSource(ApplicationSource)
+                .AddSource(GenAiSource)
+                .AddProcessor(new WithoutErrorText())
                 .AddAspNetCoreInstrumentation(options =>
                     options.Filter = context =>
                         !context.Request.Path.StartsWithSegments(HealthEndpointPath)
