@@ -18,6 +18,11 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
   </ItemGroup>
+  <ItemGroup Label="Authentication">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
+    <!-- The patch that agrees with the pinned Microsoft.Extensions packages of Infrastructure. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authorization" Version="10.0.13" />
+  </ItemGroup>
   <ItemGroup Label="API">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.20.0" />

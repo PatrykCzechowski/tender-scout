@@ -4,17 +4,21 @@ using TenderScout.Infrastructure.Agent;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Infrastructure.Persistence;
+using TenderScout.Infrastructure.Tools;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
+builder.AddBearerAuthentication(Scopes.NoticesRead, Scopes.DocumentsAsk);
 builder.Services.AddProblemDetails();
 
 // A body that is not JSON is the caller's mistake in every environment: 400, not an exception as in Development.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options
+    .AddDocumentTransformer<BearerSecurityScheme>()
+    .AddOperationTransformer<BearerSecurityScheme>());
 builder.Services.AddChunkEmbeddings();
 builder.Services.AddQuestionAnswering();
 builder.Services.AddScoped<NoticeQueries>();
@@ -31,8 +35,20 @@ app.UseStatusCodePages();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// Everything above is public: the page's files are served before a token is looked at. Of the routes below,
+// those that return data name the scope they require; an integration test fails when a new route has none.
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapDefaultEndpoints();
 app.MapOpenApi();
+
+// What the page needs to sign in: where the issuer is and which client the page is. Neither is a secret.
+app.MapGet("/sign-in-settings", (IConfiguration configuration) => Results.Ok(new
+{
+    authority = configuration["Authentication:Schemes:Bearer:Authority"],
+    clientId = configuration["WebSignIn:ClientId"],
+})).ExcludeFromDescription();
 if (app.Environment.IsDevelopment())
 {
     app.MapScalarApiReference();
@@ -40,6 +56,7 @@ if (app.Environment.IsDevelopment())
 
 // The handler returns IResult, so the responses are declared here for the OpenAPI document.
 app.MapPost("/ask", AskEndpoint.HandleAsync)
+    .RequireAuthorization(Scopes.DocumentsAsk)
     .WithSummary("Answers a question from the stored tender documents.")
     .WithDescription("200 holds an answer with its citations, or a refusal with refused set to true and no citations.")
     .Produces<AskResponse>()
@@ -47,6 +64,7 @@ app.MapPost("/ask", AskEndpoint.HandleAsync)
     .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 app.MapPost("/agent", AgentEndpoint.HandleAsync)
+    .RequireAuthorization(Scopes.DocumentsAsk)
     .WithSummary("Answers a question that needs several searches, with a model that calls the notice and document tools.")
     .WithDescription("200 holds an answer with the notices and passages it rests on, or a refusal, and the tool calls that were made. limitReached is true when the search stopped at a limit.")
     .Produces<AgentResponse>()
@@ -54,6 +72,7 @@ app.MapPost("/agent", AgentEndpoint.HandleAsync)
     .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 app.MapGet("/notices", NoticesEndpoint.HandleAsync)
+    .RequireAuthorization(Scopes.NoticesRead)
     .WithSummary("Lists stored notices, soonest submission deadline first.")
     .WithDescription(
         "The filters are those of the search_notices tool, plus hasDocuments. limit is 50 when not given and at most " +

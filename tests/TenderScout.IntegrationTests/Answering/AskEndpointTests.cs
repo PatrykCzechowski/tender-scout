@@ -11,6 +11,7 @@ using Polly.Timeout;
 using TenderScout.Domain.Documents;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Persistence;
+using TenderScout.IntegrationTests.Security;
 using TenderScout.Tests.Shared;
 
 namespace TenderScout.IntegrationTests.Answering;
@@ -248,7 +249,7 @@ public sealed class AskEndpointTests(PostgresFixture database)
 
         var ask = document.GetProperty("paths").GetProperty("/ask").GetProperty("post");
         Assert.True(ask.TryGetProperty("requestBody", out _));
-        Assert.Equal(["200", "400", "503"], ask.GetProperty("responses").EnumerateObject().Select(r => r.Name));
+        Assert.Equal(["200", "400", "503", "401", "403"], ask.GetProperty("responses").EnumerateObject().Select(r => r.Name));
     }
 
     [Theory]
@@ -287,6 +288,7 @@ public sealed class AskEndpointTests(PostgresFixture database)
         web.UseSetting("ConnectionStrings:tenderscout", connection);
         web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
         web.UseSetting("Chat:Endpoint", "http://127.0.0.1:59999");
+        web.UseTestIssuer();
     }
 
     private static async Task<AskResponse> ReadAnswerAsync(HttpResponseMessage response)
@@ -307,7 +309,7 @@ public sealed class AskEndpointTests(PostgresFixture database)
                 .AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_generator)
                 .AddSingleton<IChatClient>(_chat));
         });
-        using var client = api.CreateClient();
+        using var client = api.CreateClient().WithToken();
 
         var response = await client.PostAsJsonAsync("/ask", body, Ct);
         await response.Content.LoadIntoBufferAsync(Ct);
