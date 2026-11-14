@@ -334,25 +334,31 @@ the model of `Agent:Model` on an empty database the command fills with invented 
 calls are scored. Answers are not judged. The cases, the scoring rules and the results file
 `artifacts/eval/agent-<UTC time>.json` are described in [evals/README.md](evals/README.md#agent-tool-choices).
 
-Run on 2026-11-13 from commit `80c2249`: agent model `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M`, embeddings
-`bge-m3`, 12 cases, 3 runs each (36 case runs), reference date 2026-12-07. The run was complete and no case run
-ended with an error.
+Two runs with the same cases, invented notices and passages, reference date 2026-12-07, agent model
+`SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M`, embeddings `bge-m3`, Ollama version, limits and number of runs: 12
+cases, 3 runs each (36 case runs), on an empty database. Both runs were complete and no case run ended with an
+error. The first is from 2026-11-13, commit `80c2249`. The second is from 2026-11-14, commit `2736bf6`, after the
+instructions of the gathering phase were changed; it is the one measured run made after that change.
 
-| Number | All runs | Per run, least-most |
-| --- | ---: | ---: |
-| Expected tool chosen | 1.00 (42/42) | 1.00-1.00 |
-| Arguments matched | 0.50 (21/42) | 0.50-0.50 |
-| Cases passed | 0.58 (21/36) | 0.58-0.58 |
-| Steps per case run: mean, least, most | 1.17, 0, 2 | |
-| Any gathering limit (case runs) | 0 | |
-| Runs at the call cap of 12, at most | 0 | |
-| Unexpected calls (of them to tools that do not exist) | 0 (0) | |
-| Failed calls | 12 | |
-| Most tool calls in a run (cap 12) | 2 | |
-| Errored case runs | 0 | |
+| Number | 2026-11-13, `80c2249`: all runs | Per run, least-most | 2026-11-14, `2736bf6`: all runs | Per run, least-most |
+| --- | ---: | ---: | ---: | ---: |
+| Expected tool chosen | 1.00 (42/42) | 1.00-1.00 | 1.00 (42/42) | 1.00-1.00 |
+| Arguments matched | 0.50 (21/42) | 0.50-0.50 | 0.71 (30/42) | 0.71-0.71 |
+| Cases passed | 0.58 (21/36) | 0.58-0.58 | 0.67 (24/36) | 0.67-0.67 |
+| Steps per case run: mean, least, most | 1.17, 0, 2 | | 1.17, 0, 2 | |
+| Any gathering limit (case runs) | 0 | | 0 | |
+| Runs at the call cap of 12, at most | 0 | | 0 | |
+| Unexpected calls (of them to tools that do not exist) | 0 (0) | | 0 (0) | |
+| Failed calls | 12 | | 12 | |
+| Most tool calls in a run (cap 12) | 2 | | 2 | |
+| Errored case runs | 0 | | 0 | |
+| Runs passed, the four cases that need a notice search and then a document search | 0 of 12 | | 0 of 12 | |
+| Runs passed, the seven cases that passed in the first run | 21 of 21 | | 21 of 21 | |
 
 The data are invented and small, and answers are not judged: the numbers measure this model with this prompt on 12
 cases, not models in general.
+
+The first run:
 
 - **The agent always called the expected tools and no other.** The cases that need the documents of a tender given
   by its number passed in 9 of 9 runs, the cases that need no tool in 6 of 6, the cases that need only notices in 6
@@ -366,6 +372,32 @@ cases, not models in general.
   cases, but the runs that should have gone on stopped early, so this does not show that 12 is the right number.
 - The three runs of a case scored the same. Their calls were not identical: the order of the arguments, the value
   of the optional `limit` and the wording of the placeholder differed between runs. None of this changed a score.
+
+Between the runs only the instructions of the gathering phase changed. They now state the dates of this week and of
+next week, from Monday to Sunday. They tell the model to search notices with one or two distinctive words and to
+give a CPV code only when the question gives one, to make a call that needs a value from the result of another call
+only after that result has come, and to correct a call that a tool rejected instead of stopping. The cases, their
+expected calls and the scoring are the same files.
+
+The second run:
+
+- **The target of the change was missed.** The four cases that need two searches were to pass in at least 9 of
+  their 12 runs and passed in 0 of 12, as before. In all 12 runs the document search again carried a placeholder
+  where the publication number belongs, so the model wrote it before it had the result of the notice search. The
+  tool rejected it, and the model did not call again.
+- **The notice search of those four cases had the expected arguments in 12 of 12 runs,** against 6 of 12 in the
+  first run: none searched by a CPV code that the question does not give. These runs still do not pass, because
+  their document search failed.
+- **"Next week" was right in 3 of 3 runs** of the one case that asks for it. It is the only change that one case
+  isolates: the model now reads the dates instead of counting them.
+- **No case that passed in the first run failed:** 21 of 21 runs.
+- **The cap of 12 is still not confirmed:** again at most 2 tool calls in a run, and the runs that should have gone
+  on stopped early.
+- **The instructions were changed after the first run on these same cases,** so the second column shows what the
+  change does on them, not on other questions. Stricter wordings, among them one tool call per reply, were tried on
+  other invented questions; the model still sent both calls in one reply, so they were not measured here and are
+  not in the code.
+- The three runs of a case scored the same in this run too.
 
 CI runs the gate on 20 invented questions over 30 invented passages with stored vectors, without Ollama. It checks
 that the searches still find the answers; [evals/README.md](evals/README.md#ci-gate) lists the tests that guard the
