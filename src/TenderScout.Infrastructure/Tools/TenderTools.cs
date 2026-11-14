@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -44,7 +45,8 @@ public sealed record Passage(string DocId, string PublicationNumber, int Page, s
 /// </summary>
 /// <remarks>
 /// Invalid input and an unreachable embedding model are reported with <see cref="McpException"/>, the one exception
-/// whose message is passed on to the caller, so a model can correct its call.
+/// whose message is passed on to the caller, so a model can correct its call. The scope on each tool is what a
+/// caller of the MCP host needs; the agent calls the methods in process and is not checked against it.
 /// </remarks>
 [McpServerToolType]
 public sealed partial class TenderTools(
@@ -84,6 +86,7 @@ public sealed partial class TenderTools(
             }))];
 
     [McpServerTool(Name = "search_notices", UseStructuredContent = true, ReadOnly = true)]
+    [Authorize(Policy = Scopes.NoticesRead)]
     [Description(
         "Searches the stored public procurement notices (tender announcements) and returns them newest first, each " +
         "with its publication number, title, buyer, main CPV code, publication date, submission deadline and link. " +
@@ -124,6 +127,7 @@ public sealed partial class TenderTools(
     }
 
     [McpServerTool(Name = "get_notice", UseStructuredContent = true, ReadOnly = true)]
+    [Authorize(Policy = Scopes.NoticesRead)]
     [Description(
         "Returns one stored public procurement notice by its publication number: title, buyer, main CPV code and " +
         "all CPV codes, publication date, submission deadline and link. Use it when the publication number is " +
@@ -145,6 +149,7 @@ public sealed partial class TenderTools(
     }
 
     [McpServerTool(Name = "search_tender_documents", UseStructuredContent = true, ReadOnly = true)]
+    [Authorize(Policy = Scopes.DocumentsAsk)]
     [Description(
         "Searches the text of the stored tender documents, such as the specification of the terms of a tender " +
         "(SWZ), and returns the best matching passages, each with the document id, the publication number of its " +

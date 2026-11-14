@@ -2,7 +2,8 @@
 # Builds the four container images and checks that they are what the README says and that they start.
 # Needs Docker and curl. No model and no registry is used. Run it from anywhere: scripts/check-images.sh
 #
-# It starts a throwaway PostgreSQL and the services on a network of its own, publishes their HTTP ports on
+# It starts a throwaway PostgreSQL, a Keycloak with the realm file of the repository, and the services on a
+# network of its own, publishes their HTTP ports on
 # the loopback address only, and removes its containers and network when it ends, also when a check fails.
 # The four images stay.
 set -euo pipefail
@@ -62,6 +63,8 @@ expect() {
 }
 
 json=(--header 'Content-Type: application/json' --data '{"question": "Jakie wadium jest wymagane?"}')
+initialize=(--header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --data
+    '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "check", "version": "1"}}}')
 
 echo "== Build"
 for image in "${images[@]}"; do
@@ -102,28 +105,53 @@ docker run --detach --name "$run-migrations-unset" tender-scout-migrations >/dev
 wait_for_exit "$run-migrations-unset" 60
 [ "$code" != 0 ] || fail "the migrations ended with code 0 without a connection string" "$run-migrations-unset"
 
-echo "== API and MCP server, with a database and no model"
-docker run --detach --name "$run-api" --network "$run" --publish 127.0.0.1::8080 --env "$database" tender-scout-api >/dev/null
-docker run --detach --name "$run-mcp" --network "$run" --publish 127.0.0.1::8080 --env "$database" tender-scout-mcp >/dev/null
+echo "== Token issuer"
+# Keycloak with the realm file of the repository. Its hostname is fixed to its name on the check's network, so
+# a token asked for from outside names the issuer the services reach from inside.
+docker run --detach --name "$run-keycloak" --network "$run" --publish 127.0.0.1::8080 \
+    --volume "$PWD/keycloak:/opt/keycloak/data/import:ro" --env "KC_HOSTNAME=http://$run-keycloak:8080" \
+    quay.io/keycloak/keycloak:26.8 start-dev --import-realm >/dev/null
+expect 200 "$run-keycloak" /realms/tender-scout
+
+# A token of the machine client with both scopes. Its secret is read from the realm file; the token is never printed.
+secret=$(sed -n 's/.*"secret": "\(.*\)".*/\1/p' keycloak/tender-scout-realm.json)
+token=$(curl --silent --max-time 20 "http://$(docker port "$run-keycloak" 8080)/realms/tender-scout/protocol/openid-connect/token" \
+    --data grant_type=client_credentials --data client_id=tender-scout-machine --data-urlencode "client_secret=$secret" \
+    --data-urlencode "scope=notices:read documents:ask" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+[ -n "$token" ] || fail "Keycloak gave no token to the machine client" "$run-keycloak"
+bearer=(--header "Authorization: Bearer $token")
+issuer=(--env "Authentication__Schemes__Bearer__Authority=http://$run-keycloak:8080/realms/tender-scout"
+    --env Authentication__Schemes__Bearer__ValidAudiences__0=tender-scout-api
+    --env Authentication__Schemes__Bearer__RequireHttpsMetadata=false)
+
+echo "== API and MCP server, with a database, the issuer and no model"
+docker run --detach --name "$run-api" --network "$run" --publish 127.0.0.1::8080 --env "$database" "${issuer[@]}" tender-scout-api >/dev/null
+docker run --detach --name "$run-mcp" --network "$run" --publish 127.0.0.1::8080 --env "$database" "${issuer[@]}" tender-scout-mcp >/dev/null
 expect 200 "$run-api" /health
 expect 200 "$run-mcp" /health
 for container in "$run-api" "$run-mcp"; do
     [ "$(docker exec "$container" stat --format %u /proc/1)" != 0 ] || fail "$container runs its service as root"
 done
 
+# The page is public. The data needs a token: 401 without one, and the token of the real realm is accepted.
 expect 200 "$run-api" /
-notices=$(curl --silent --max-time 5 "http://$(docker port "$run-api" 8080)/notices")
+expect 401 "$run-api" /notices
+expect 401 "$run-api" /ask "${json[@]}"
+expect 401 "$run-api" /agent "${json[@]}"
+expect 401 "$run-mcp" /mcp "${initialize[@]}"
+notices=$(curl --silent --max-time 5 "${bearer[@]}" "http://$(docker port "$run-api" 8080)/notices")
 [[ "$notices" == *'"total":0'* && "$notices" == *'"notices":[]'* ]] || fail "/notices did not answer with an empty list: $notices" "$run-api"
-expect 503 "$run-api" /ask "${json[@]}"
-expect 503 "$run-api" /agent "${json[@]}"
+expect 503 "$run-api" /ask "${json[@]}" "${bearer[@]}"
+expect 503 "$run-api" /agent "${json[@]}" "${bearer[@]}"
+expect 200 "$run-mcp" /mcp "${initialize[@]}" "${bearer[@]}"
 expect 404 "$run-mcp" /
 
 echo "== Time zone, through the agent"
 # With a model name the agent works out today's date in Poland before it calls the model, which is not there.
 # So 503 means that Europe/Warsaw resolved in this image; without the time zone data the answer is 500.
-docker run --detach --name "$run-api-agent" --network "$run" --publish 127.0.0.1::8080 --env "$database" --env Agent__Model=no-model tender-scout-api >/dev/null
+docker run --detach --name "$run-api-agent" --network "$run" --publish 127.0.0.1::8080 --env "$database" "${issuer[@]}" --env Agent__Model=no-model tender-scout-api >/dev/null
 expect 200 "$run-api-agent" /health
-[ "$(status "$run-api-agent" /agent "${json[@]}")" = 503 ] || fail "/agent did not answer 503 with a model that cannot be reached" "$run-api-agent"
+[ "$(status "$run-api-agent" /agent "${json[@]}" "${bearer[@]}")" = 503 ] || fail "/agent did not answer 503 with a model that cannot be reached" "$run-api-agent"
 
 echo "== Worker"
 # Started without settings it must end by itself and name the broker it misses. It is not started with a

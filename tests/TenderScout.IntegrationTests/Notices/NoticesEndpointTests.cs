@@ -9,6 +9,7 @@ using TenderScout.Domain.Notices;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.Infrastructure.Tools;
 using TenderScout.IntegrationTests.Tools;
+using TenderScout.IntegrationTests.Security;
 
 namespace TenderScout.IntegrationTests.Notices;
 
@@ -189,12 +190,13 @@ public sealed class NoticesEndpointTests(PostgresFixture database)
             web.UseSetting("ConnectionStrings:tenderscout", connection);
             web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
             web.UseSetting("Chat:Endpoint", "http://127.0.0.1:59999");
+            web.UseTestIssuer();
         });
 
     private static async Task<JsonElement> GetAsync(string connection, string queryString)
     {
         await using var api = CreateApi(connection);
-        using var client = api.CreateClient();
+        using var client = api.CreateClient().WithToken();
         using var response = await client.GetAsync("/notices" + queryString, Ct);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
@@ -210,7 +212,7 @@ public sealed class NoticesEndpointTests(PostgresFixture database)
     private static async Task<JsonElement> GetProblemAsync(string queryString, string environment)
     {
         await using var api = CreateApi("Host=127.0.0.1;Port=1;Database=none;Username=none;Password=none;Timeout=1", environment);
-        using var client = api.CreateClient();
+        using var client = api.CreateClient().WithToken();
         using var response = await client.GetAsync("/notices" + queryString, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);

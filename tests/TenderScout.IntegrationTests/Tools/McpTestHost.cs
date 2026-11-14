@@ -3,12 +3,14 @@ extern alias McpHost;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using TenderScout.IntegrationTests.Security;
 
 namespace TenderScout.IntegrationTests.Tools;
 
@@ -36,13 +38,18 @@ internal sealed class McpTestHost : IAsyncDisposable
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <param name="generator">Replaces the embedding model; without it the host points at a port where nothing listens.</param>
-    public static async Task<McpTestHost> StartAsync(string connection, IEmbeddingGenerator<string, Embedding<float>>? generator = null)
+    /// <param name="scope">The scopes of the token the client sends.</param>
+    public static async Task<McpTestHost> StartAsync(
+        string connection,
+        IEmbeddingGenerator<string, Embedding<float>>? generator = null,
+        string scope = TestIssuer.BothScopes)
     {
         var log = new ErrorLog();
         var factory = new WebApplicationFactory<McpHost::Program>().WithWebHostBuilder(web =>
         {
             web.UseSetting("ConnectionStrings:tenderscout", connection);
             web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
+            web.UseTestIssuer();
             web.ConfigureTestServices(services =>
             {
                 services.AddSingleton<ILoggerProvider>(log);
@@ -53,13 +60,16 @@ internal sealed class McpTestHost : IAsyncDisposable
             });
         });
 
-        return new McpTestHost(factory, log, await ConnectAsync(factory));
+        return new McpTestHost(factory, log, await ConnectAsync(factory, scope));
     }
 
     /// <summary>A second, independent client of the same server.</summary>
-    public Task<McpClient> ConnectAsync() => ConnectAsync(_factory);
+    public Task<McpClient> ConnectAsync(string scope = TestIssuer.BothScopes) => ConnectAsync(_factory, scope);
 
     public HttpClient CreateHttpClient() => _factory.CreateClient();
+
+    /// <summary>Every route the MCP host maps.</summary>
+    public IEnumerable<RouteEndpoint> Routes => _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>();
 
     public async Task<CallToolResult> CallAsync(string tool, object? arguments = null)
     {
@@ -92,9 +102,9 @@ internal sealed class McpTestHost : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private static async Task<McpClient> ConnectAsync(WebApplicationFactory<McpHost::Program> factory)
+    private static async Task<McpClient> ConnectAsync(WebApplicationFactory<McpHost::Program> factory, string scope)
     {
-        var http = factory.CreateClient();
+        var http = factory.CreateClient().WithToken(TestIssuer.Token(scope));
         var options = new HttpClientTransportOptions
         {
             Endpoint = new Uri(http.BaseAddress!, "/mcp"),

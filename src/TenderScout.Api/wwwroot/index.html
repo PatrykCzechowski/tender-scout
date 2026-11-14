@@ -7,10 +7,21 @@
 <link rel="stylesheet" href="design.css">
 <link rel="stylesheet" href="app.css">
 <script src="app.js" defer></script>
+<script src="signin.js" defer></script>
 </head>
 <body>
 <div class="shell">
-<div class="app" id="app" data-page="dash" data-mobile="list" data-collapsed="false">
+<main class="signed-out" id="signedOut" aria-labelledby="h-signin">
+  <div class="card so-card">
+    <div class="brand">tender<i>/</i>scout</div>
+    <h1 id="h-signin">Zaloguj się</h1>
+    <p>Przetargi IT z TED i pytania o ich dokumenty SWZ są dostępne po zalogowaniu.</p>
+    <noscript><p class="nojs">Ta strona potrzebuje JavaScriptu. Włącz go w przeglądarce i odśwież stronę.</p></noscript>
+    <div class="alert" id="signInMsg" role="alert" hidden></div>
+    <button type="button" class="btn" id="signIn">Zaloguj się</button>
+  </div>
+</main>
+<div class="app" id="app" data-page="dash" data-mobile="list" data-collapsed="false" hidden>
   <aside class="side" aria-label="Nawigacja">
     <div class="side-top">
       <div class="brand hide-c">tender<i>/</i>scout</div>
@@ -23,6 +34,10 @@
       <a class="nav-item" href="#skrzynka" data-view="skrzynka" title="Skrzynka"><span class="lbl">Skrzynka</span><svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9.5l1.6-5a1 1 0 0 1 .95-.7h6.9a1 1 0 0 1 .95.7l1.6 5V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5z"/><path d="M2 9.5h3.2a1 1 0 0 1 1 1 1.8 1.8 0 0 0 3.6 0 1 1 0 0 1 1-1H14"/></svg></a>
       <a class="nav-item" href="#asystent" data-view="asystent" title="Asystent"><span class="lbl">Asystent</span><svg class="ic" width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8l1.4 3.9 3.9 1.4-3.9 1.4L8 12.4 6.6 8.5 2.7 7.1l3.9-1.4L8 1.8z"/><path d="M12.8 11.2v2.6M11.5 12.5h2.6"/></svg></a>
     </nav>
+    <button type="button" class="side-user" id="signOut" aria-label="Wyloguj się" title="Wyloguj się">
+      <span class="avatar" aria-hidden="true"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5H4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h2.5M10.5 11l3-3-3-3M13.5 8H6.5"/></svg></span>
+      <span class="hide-c su-t"><b>Wyloguj się</b><small>Konto w Keycloak</small></span>
+    </button>
   </aside>
 
   <main class="main">
@@ -31,7 +46,6 @@
         <h1 id="h-dash"><span class="hl">Dzień dobry!</span></h1>
         <p>O co chcesz dziś zapytać w dokumentach?</p>
       </div>
-      <noscript><p class="nojs">Ta strona potrzebuje JavaScriptu. Włącz go w przeglądarce i odśwież stronę.</p></noscript>
       <div class="grid sugrow" id="dashExamples"></div>
       <div class="grid">
         <article class="card s7" aria-labelledby="h-cal">

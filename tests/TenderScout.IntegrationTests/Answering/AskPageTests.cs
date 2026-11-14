@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using TenderScout.IntegrationTests.Security;
 
 namespace TenderScout.IntegrationTests.Answering;
 
@@ -97,7 +98,7 @@ public sealed partial class AskPageTests(PostgresFixture database)
         Assert.Equal(
             ["query", "cpvPrefix", "deadlineFrom", "deadlineTo", "hasDocuments", "limit"],
             notices.GetProperty("parameters").EnumerateArray().Select(p => p.GetProperty("name").GetString()));
-        Assert.Equal(["200", "400"], notices.GetProperty("responses").EnumerateObject().Select(r => r.Name));
+        Assert.Equal(["200", "400", "401", "403"], notices.GetProperty("responses").EnumerateObject().Select(r => r.Name));
         Assert.Contains("at most 200", notices.GetProperty("description").GetString(), StringComparison.Ordinal);
     }
 
@@ -108,6 +109,7 @@ public sealed partial class AskPageTests(PostgresFixture database)
             web.UseSetting("ConnectionStrings:tenderscout", database.ConnectionString);
             web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
             web.UseSetting("Chat:Endpoint", "http://127.0.0.1:59999");
+            web.UseTestIssuer();
         });
 
     private static string ContentType(string file) => Path.GetExtension(file) switch

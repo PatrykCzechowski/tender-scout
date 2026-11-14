@@ -17,3 +17,4 @@ instead, with a dated "amended" note in its status.
 | [0005](0005-mcp-server-shared-tools.md) | MCP server over Streamable HTTP with tools defined once | Accepted |
 | [0006](0006-agent-two-phases-limits.md) | Agent in two phases: tool calls gather sources, one call answers from them | Accepted |
 | [0007](0007-container-images.md) | One hand-written Dockerfile with a shared build stage and four runtime images | Accepted |
+| [0008](0008-bearer-tokens-and-scopes.md) | Bearer tokens validated locally, two scopes, Keycloak for local runs only | Accepted |

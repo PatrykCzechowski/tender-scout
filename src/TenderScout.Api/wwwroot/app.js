@@ -1,5 +1,6 @@
 // The web page: three views (Pulpit, Skrzynka, Asystent) switched by the address after '#'. The assistant sends one
-// question at a time to POST /ask; the start page and the inbox read GET /notices.
+// question at a time to POST /ask; the start page and the inbox read GET /notices. Every call to the API goes through
+// callApi() in signin.js, which adds the token; the views load only once the visitor has signed in.
 // Text from the API is always inserted as text (textContent), never as HTML. Nothing is stored in the browser.
 'use strict';
 
@@ -22,7 +23,8 @@ const TEXT = {
   unavailable: ['Model jest teraz niedostępny', 'Spróbuj ponownie za chwilę.'],
   timeout: ['Odpowiedź nie przyszła w ciągu 2 minut', 'Przerwałem czekanie. Spróbuj ponownie za chwilę.'],
   offline: ['Brak połączenia z API', 'Sprawdź, czy aplikacja działa, i spróbuj ponownie.'],
-  failed: ['Coś poszło nie tak', 'Serwer zwrócił błąd. Spróbuj ponownie za chwilę.']
+  failed: ['Coś poszło nie tak', 'Serwer zwrócił błąd. Spróbuj ponownie za chwilę.'],
+  forbidden: ['Brak uprawnień', 'To konto nie może zadawać pytań o dokumenty.']
 };
 
 // The design's icons: 16-unit paths, drawn with the stroke settings of the design.
@@ -168,6 +170,7 @@ async function outcome(response, n) {
     markFields('question' in errors, 'publicationNumber' in errors);
     return { message: TEXT.invalid };
   }
+  if (response.status === 403) return { message: TEXT.forbidden };
   return { message: response.status === 503 ? TEXT.unavailable : TEXT.failed };
 }
 
@@ -184,12 +187,12 @@ async function ask(q, n) {
   send.disabled = true;
   let result;
   try {
-    const response = await fetch('ask', {
+    const response = await callApi('ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ question: q, publicationNumber: n }),
       signal: request.controller.signal
-    });
+    }, q);
     result = await outcome(response, n);
   } catch {
     result = { message: request.timedOut ? TEXT.timeout : TEXT.offline };
@@ -258,6 +261,7 @@ const WEEKS = 5;
 const NOTICE_TEXT = {
   loading: 'Wczytuję ogłoszenia…',
   failed: 'Nie udało się pobrać ogłoszeń',
+  forbidden: 'To konto nie ma dostępu do ogłoszeń',
   noOpen: 'Nie ma teraz otwartych przetargów w bazie',
   noMatch: 'Nic tu nie pasuje',
   noneChosen: 'Wybierz przetarg z listy, żeby zobaczyć szczegóły.'
@@ -284,6 +288,7 @@ function go(view) {
 
 // A view reads "today" when it loads; it loads again when the browser's date has changed since then.
 function showView() {
+  if (!signedIn()) return;
   const view = currentView();
   for (const name of Object.keys(VIEWS)) $('view-' + name).hidden = name !== view;
   $('app').dataset.page = VIEWS[view];
@@ -320,7 +325,8 @@ function pl(n, one, few, many) {
 // Open notices only: every request starts at today's deadline unless it asks for a later day.
 async function fetchNotices(params) {
   const query = new URLSearchParams({ deadlineFrom: today(), ...params });
-  const response = await fetch('notices?' + query, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(NOTICES_TIMEOUT_MS) });
+  const response = await callApi('notices?' + query, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(NOTICES_TIMEOUT_MS) });
+  if (response.status === 403) throw new Error('forbidden');
   const reply = response.status === 200 ? await readJson(response) : null;
   if (!reply || typeof reply.total !== 'number' || !Array.isArray(reply.notices)) throw new Error('unusable reply');
   return reply;
@@ -333,7 +339,9 @@ function stateBox(title, detail, button) {
   return el('div', { class: 'empty-list' }, el('b', null, title), detail || null, button || null);
 }
 
-function failure(retry) {
+// A 403 will not pass on a retry, so it gets its own text and no button.
+function failure(retry, error) {
+  if (error?.message === 'forbidden') return stateBox(NOTICE_TEXT.forbidden);
   const button = el('button', { type: 'button', class: 'btn ghost retry' }, 'Spróbuj ponownie');
   button.addEventListener('click', retry);
   return stateBox(NOTICE_TEXT.failed, null, button);
@@ -390,8 +398,8 @@ async function loadCounts() {
       countRow('Otwarte przetargi', open.total, open.total, 'all', 'Ogłoszenia IT z TED z terminem ofert dziś lub później'),
       countRow('Z terminem w ciągu 7 dni', soon.total, open.total, 'soon'),
       countRow('Z dokumentami SWZ w bazie', docs.total, open.total, 'docs', 'Tylko o nie asystent odpowie z dokumentów')));
-  } catch {
-    box.replaceChildren(failure(loadCounts));
+  } catch (error) {
+    box.replaceChildren(failure(loadCounts, error));
   }
 }
 
@@ -412,8 +420,8 @@ async function loadCalendar() {
   try {
     const reply = await fetchNotices({ deadlineTo: addDays(start, WEEKS * 7 - 1), limit: String(LIST_LIMIT) });
     renderCalendar(box, reply, t, start);
-  } catch {
-    box.replaceChildren(failure(loadCalendar));
+  } catch (error) {
+    box.replaceChildren(failure(loadCalendar, error));
   }
 }
 
@@ -487,8 +495,8 @@ async function loadDay(day) {
     fill(box, title,
       reply.notices.length ? tenderList(reply.notices) : el('p', { class: 'fine' }, 'Brak terminów tego dnia.'),
       reply.total > reply.notices.length ? el('p', { class: 'fine' }, 'Pokazano ' + reply.notices.length + ' z ' + reply.total + '.') : null);
-  } catch {
-    if (request === dash.dayRequest) box.replaceChildren(title, failure(() => loadDay(day)));
+  } catch (error) {
+    if (request === dash.dayRequest) box.replaceChildren(title, failure(() => loadDay(day), error));
   }
 }
 
@@ -547,8 +555,8 @@ async function loadInbox() {
   try {
     const reply = await fetchNotices(params);
     if (request === inbox.request) renderInbox(reply);
-  } catch {
-    if (request === inbox.request) $('list').replaceChildren(failure(loadInbox));
+  } catch (error) {
+    if (request === inbox.request) $('list').replaceChildren(failure(loadInbox, error));
   }
 }
 
@@ -684,4 +692,4 @@ showExamples();
 showDashExamples();
 renderFilters();
 renderDetail();
-showView();
+// signin.js shows the views once the visitor has signed in.

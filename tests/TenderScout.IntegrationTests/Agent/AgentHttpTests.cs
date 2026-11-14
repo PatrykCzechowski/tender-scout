@@ -201,7 +201,7 @@ public sealed class AgentHttpTests(PostgresFixture database)
 
         var operation = paths.GetProperty("/agent").GetProperty("post");
         Assert.True(operation.TryGetProperty("requestBody", out _));
-        Assert.Equal(["200", "400", "503"], operation.GetProperty("responses").EnumerateObject().Select(r => r.Name));
+        Assert.Equal(["200", "400", "503", "401", "403"], operation.GetProperty("responses").EnumerateObject().Select(r => r.Name));
         Assert.True(paths.TryGetProperty("/ask", out _));
     }
 }

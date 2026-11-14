@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Time.Testing;
 using TenderScout.Domain.Notices;
 using TenderScout.Infrastructure.Agent;
 using TenderScout.Infrastructure.Persistence;
+using TenderScout.IntegrationTests.Security;
 using TenderScout.IntegrationTests.Tools;
 using TenderScout.Tests.Shared;
 
@@ -36,6 +38,7 @@ internal sealed class AgentTestHost : IAsyncDisposable
             web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
             web.UseSetting("Chat:Endpoint", "http://127.0.0.1:59999");
             web.UseSetting("Agent:Model", agentModel);
+            web.UseTestIssuer();
             web.ConfigureTestServices(services => services
                 .AddSingleton<IChatClient>(Chat)
                 .AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(Generator)
@@ -74,7 +77,7 @@ internal sealed class AgentTestHost : IAsyncDisposable
 
     public async Task<HttpResponseMessage> PostAsync(object? body, CancellationToken? cancellationToken = null)
     {
-        using var client = _factory.CreateClient();
+        using var client = CreateClient();
         var response = await client.PostAsJsonAsync("/agent", body, cancellationToken ?? Ct);
         await response.Content.LoadIntoBufferAsync(Ct);
         return response;
@@ -88,7 +91,14 @@ internal sealed class AgentTestHost : IAsyncDisposable
         return (await response.Content.ReadFromJsonAsync<AgentResponse>(Ct))!;
     }
 
-    public HttpClient CreateClient() => _factory.CreateClient();
+    /// <summary>A client that sends a valid token with both scopes, or the given token.</summary>
+    public HttpClient CreateClient(string? token = null) => _factory.CreateClient().WithToken(token);
+
+    /// <summary>A client that sends no token.</summary>
+    public HttpClient CreateAnonymousClient() => _factory.CreateClient();
+
+    /// <summary>Every route the API maps.</summary>
+    public IEnumerable<RouteEndpoint> Routes => _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>();
 
     public ValueTask DisposeAsync() => _factory.DisposeAsync();
 
