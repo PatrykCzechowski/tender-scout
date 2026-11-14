@@ -449,9 +449,10 @@ The API then serves the page at `http://localhost:8080/` and answers `/health`.
   model is unavailable.
 - **The worker ingests notices from TED as it is.** It reads a document from the path in its message, which is a path
   on the machine that ran the import, so it processes documents only when that folder is mounted at the same path.
-- **`--init` on arm64.** On Apple Silicon and on a Raspberry Pi a .NET process that is the first process of a
-  container keeps running after an unhandled exception, for example a worker without its broker setting.
-  `docker run --init` puts a small init process in front, and the container then ends as it does on amd64.
+- **`--init`.** With Docker Desktop on an Apple Silicon Mac, a worker started without its broker setting printed
+  the unhandled exception and then kept running. With `docker run --init`, which puts a small init process in
+  front, it ended. On the amd64 runner of CI it ends by itself. Other arm64 machines, such as a Raspberry Pi, were
+  not checked, and the cause is not established.
 - **`/health` follows the database slowly.** It connects to the database, and when the database is gone it answers
   503 only after about a minute, because the check goes through the retry policy of the connection.
 

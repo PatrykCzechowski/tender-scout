@@ -12,7 +12,9 @@ run="tender-scout-check-$$"
 images=(api mcp worker migrations)
 
 cleanup() {
-    docker ps --all --quiet --filter "name=$run" | xargs -r docker rm --force --volumes >/dev/null
+    # The filter matches a part of a name, so it ends with the hyphen that follows the process id:
+    # the containers of a run whose id only starts with the same digits are not touched.
+    docker ps --all --quiet --filter "name=$run-" | xargs -r docker rm --force --volumes >/dev/null
     docker network rm "$run" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -126,8 +128,9 @@ expect 200 "$run-api-agent" /health
 echo "== Worker"
 # Started without settings it must end by itself and name the broker it misses. It is not started with a
 # broker here, because it would then call the TED API.
-# On amd64, where the images are deployed, the process ends after the unhandled exception. On arm64 a .NET
-# process that is the first process of a container keeps running instead, so there Docker's init goes in front.
+# On amd64, where the images are deployed, the process ends after the unhandled exception. With Docker
+# Desktop on an Apple Silicon Mac it was seen to keep running instead, so on every other architecture than
+# amd64 Docker's init process goes in front.
 init=--init
 if [ "$(docker version --format '{{.Server.Arch}}')" = amd64 ]; then
     init=

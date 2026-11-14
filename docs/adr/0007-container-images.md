@@ -68,10 +68,12 @@ on every pull request that the images build and start, without pushing them.
   four times the space.
 - **The image tag `10.0` moves.** A rebuild picks up the monthly fixes, and two builds
   of the same commit can differ. Pinned digests need tooling to keep them fresh.
-- **On arm64 a crashed process does not end by itself.** A .NET process that is the
-  first process of a container keeps running after an unhandled exception; on amd64 it
-  ends, which the check shows on every pull request. `docker run --init` avoids it, and
-  on arm64 the check starts the worker that way. The deployment target is amd64.
+- **A crashed process did not end on one arm64 machine.** With Docker Desktop on an
+  Apple Silicon Mac, a worker without its broker setting printed the unhandled
+  exception and kept running; with `docker run --init` it ended. On the amd64 runner
+  of CI it ends by itself, which the check shows on every pull request; on any other
+  architecture the check starts the worker with `--init`. Other arm64 machines were
+  not checked and the cause is not established. The deployment target is amd64.
 - **`/health` takes about a minute to turn unhealthy** when the database is gone,
   because the database check goes through the retry policy. Probes of a deployment
   must allow for that.
