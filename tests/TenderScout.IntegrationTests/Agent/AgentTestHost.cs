@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using TenderScout.Domain.Notices;
 using TenderScout.Infrastructure.Agent;
+using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.IntegrationTests.Security;
 using TenderScout.IntegrationTests.Tools;
@@ -19,18 +20,25 @@ namespace TenderScout.IntegrationTests.Agent;
 
 /// <summary>
 /// The API in memory against a test database, with a scripted chat model, the fake embedding generator, a clock the
-/// test moves and a record of what was logged. Only the model's replies are scripted: the real tools run.
+/// test moves and a record of what was logged. Only the model's replies are scripted: the real tools run. With an
+/// OpenRouter handler, OpenRouter is the chat provider and only its HTTP answers are scripted.
 /// </summary>
 internal sealed class AgentTestHost : IAsyncDisposable
 {
     public const string Question = "Jakie wadium trzeba wnieść w przetargu na serwery?";
     public const string AgentModel = "agent-model";
+    public const string AskModel = "ask-model";
+    public const string OpenRouterKey = "sk-or-test-5d21e0";
 
     private readonly WebApplicationFactory<Program> _factory;
     private readonly Log _log = new();
 
     /// <param name="agentModel">The <c>Agent:Model</c> setting; <see langword="null"/> leaves it out.</param>
-    public AgentTestHost(string connection, string? agentModel = AgentModel)
+    /// <param name="openRouter">
+    /// When given, OpenRouter is selected with <see cref="OpenRouterKey"/> and this handler answers its HTTP requests;
+    /// otherwise <see cref="Chat"/> stands in for the model.
+    /// </param>
+    public AgentTestHost(string connection, string? agentModel = AgentModel, FakeOpenRouterHandler? openRouter = null)
     {
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
@@ -38,12 +46,31 @@ internal sealed class AgentTestHost : IAsyncDisposable
             web.UseSetting("Embedding:Endpoint", "http://127.0.0.1:59998");
             web.UseSetting("Chat:Endpoint", "http://127.0.0.1:59999");
             web.UseSetting("Agent:Model", agentModel);
+            if (openRouter is not null)
+            {
+                web.UseSetting("Chat:Provider", ChatModelOptions.OpenRouter);
+                web.UseSetting("Chat:Endpoint", "https://openrouter.test/api/v1");
+                web.UseSetting("Chat:Model", AskModel);
+                web.UseSetting(ChatModelOptions.ApiKeySetting, OpenRouterKey);
+            }
+
             web.UseTestIssuer();
-            web.ConfigureTestServices(services => services
-                .AddSingleton<IChatClient>(Chat)
-                .AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(Generator)
-                .AddSingleton<TimeProvider>(Clock)
-                .AddSingleton<ILoggerProvider>(_log));
+            web.ConfigureTestServices(services =>
+            {
+                if (openRouter is null)
+                {
+                    services.AddSingleton<IChatClient>(Chat);
+                }
+                else
+                {
+                    services.AddHttpClient(AnsweringServiceCollectionExtensions.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => openRouter);
+                }
+
+                services
+                    .AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(Generator)
+                    .AddSingleton<TimeProvider>(Clock)
+                    .AddSingleton<ILoggerProvider>(_log);
+            });
         });
     }
 
