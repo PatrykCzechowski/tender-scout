@@ -397,7 +397,7 @@ public sealed partial class AskEndpointTests(PostgresFixture database)
         var answer = await ReadAnswerAsync(await AskAsync(connection, new { question }));
 
         Assert.Equal(
-            (true, $"W pytaniu są różne numery ogłoszeń: {numbers}. Podaj jeden numer w polu numeru ogłoszenia.", (string?)null, (PublicationNumberSource?)null, RefusalReason.SeveralTenders),
+            (true, $"W pytaniu są różne numery ogłoszeń: {numbers}. Zostaw w pytaniu jeden numer.", (string?)null, (PublicationNumberSource?)null, RefusalReason.SeveralTenders),
             (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
         Assert.Empty(answer.Citations);
         Assert.Empty(_generator.Calls);

@@ -129,7 +129,7 @@ public sealed partial class QuestionAnswerer(
         {
             if (named.Count > 1)
             {
-                var several = $"W pytaniu są różne numery ogłoszeń: {string.Join(", ", named)}. Podaj jeden numer w polu numeru ogłoszenia.";
+                var several = $"W pytaniu są różne numery ogłoszeń: {string.Join(", ", named)}. Zostaw w pytaniu jeden numer.";
                 return new TenderChoice(null, null, new AskResponse(true, several, [], RefusalReason: RefusalReason.SeveralTenders));
             }
 

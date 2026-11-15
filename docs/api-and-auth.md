@@ -107,7 +107,7 @@ tender is known when at least one passage of its documents is stored; the notice
 | --- | --- | --- |
 | empty | none | Search over all documents; `publicationNumber` and `publicationNumberSource` are `null` |
 | empty | one, with documents | Limited to it, `publicationNumberSource` `"question"`; otherwise the same reply as with that number in the field |
-| empty | two or more different | Refusal `"severalTenders"`: `W pytaniu są różne numery ogłoszeń: 111111-2026, 222222-2026. Podaj jeden numer w polu numeru ogłoszenia.` |
+| empty | two or more different | Refusal `"severalTenders"`: `W pytaniu są różne numery ogłoszeń: 111111-2026, 222222-2026. Zostaw w pytaniu jeden numer.` |
 | a number | none, or only the field's number | Limited to the field's tender, `publicationNumberSource` `"field"` |
 | a number | at least one other number | Refusal `"fieldConflict"`: `W polu jest numer ogłoszenia 111111-2026, a w pytaniu 222222-2026. Zostaw jeden z nich.`, naming the other numbers in the order of the question; `publicationNumber` and `publicationNumberSource` are `null` |
 | a number without documents, from the field or the question | — | Refusal `"noDocuments"`: `Nie mam dokumentów ogłoszenia 999999-2026.`, naming that number and where it came from |
