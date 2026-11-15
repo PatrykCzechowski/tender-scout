@@ -29,6 +29,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # lychee is a widely used link checker with a ready action; offline it checks the relative links, images and
+      # #anchors of the Markdown files in seconds, without flaky requests to other sites.
+      - name: Check the links in the Markdown files
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: --offline --include-fragments --no-progress README.md 'docs/**/*.md' 'evals/**/*.md'
+
       - name: Setup .NET (from global.json)
         uses: actions/setup-dotnet@v6
         env:
