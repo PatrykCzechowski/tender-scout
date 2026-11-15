@@ -4,6 +4,12 @@
 
 Accepted — 2026-11-14. Amended 2026-11-14: the API and the MCP server also need the
 issuer and the audience of their tokens, see [ADR-0008](0008-bearer-tokens-and-scopes.md).
+Amended 2026-11-15: the four images now also run together from a root
+`docker-compose.yml`, the local demo on invented data. The build context lets in the two
+files of demo data, which the migrations image loads with `--demo-data`. Compose checks
+`/health` with a bash request, as the images still hold no HTTP tool and no
+`HEALTHCHECK`. `scripts/check-compose.sh` checks that stack in the same CI job. The
+decisions below are unchanged; see the README, "Run the demo".
 
 ## Context
 
