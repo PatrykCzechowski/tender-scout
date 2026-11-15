@@ -61,9 +61,41 @@ public sealed class DemoDataTests(PostgresFixture database)
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => LoadAsync(connection));
 
         Assert.Contains("docker compose down --volumes", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(["999999-2026"], (await SnapshotAsync(connection)).Split('\n').Where(line => line.StartsWith("notice", StringComparison.Ordinal)).Select(line => line[7..]));
+        Assert.Equal(["999999-2026"], (await SnapshotAsync(connection)).Split('\n').Where(line => line.StartsWith("notice", StringComparison.Ordinal)).Select(line => line.Split(' ')[1]));
         await using var check = database.CreateDbContext(connection);
         Assert.Equal(0, await check.Documents.CountAsync(Ct));
+    }
+
+    [Theory]
+    [InlineData("deadline")]
+    [InlineData("model")]
+    [InlineData("vector")]
+    public async Task SameKeysWithOneFieldChanged_AreRefused_AndLeftAsTheyAre(string change)
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await LoadAsync(connection);
+        await using (var dbContext = database.CreateDbContext(connection))
+        {
+            var notice = await dbContext.Notices.SingleAsync(n => n.PublicationNumber == "100101-2026", Ct);
+            var chunk = await dbContext.Documents.Where(d => d.DocId == "syn-01").SelectMany(d => d.Chunks).OrderBy(c => c.Position).FirstAsync(Ct);
+            var vector = chunk.Embedding!.ToArray();
+            vector[0] = float.BitIncrement(vector[0]);
+            switch (change)
+            {
+                case "deadline": notice.SubmissionDeadline = notice.SubmissionDeadline!.Value.AddDays(1); break;
+                case "model": chunk.EmbeddingModel = "other-model"; break;
+                default: chunk.Embedding = new Pgvector.Vector(vector); break;
+            }
+
+            await dbContext.SaveChangesAsync(Ct);
+        }
+
+        var before = await SnapshotAsync(connection);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => LoadAsync(connection));
+
+        Assert.Contains("docker compose down --volumes", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, await SnapshotAsync(connection));
     }
 
     [Fact]
@@ -139,11 +171,12 @@ public sealed class DemoDataTests(PostgresFixture database)
         }
     }
 
-    /// <summary>Every stored notice, document and chunk with its key and content, one per line.</summary>
+    /// <summary>Every stored notice and chunk with its key and content, one per line.</summary>
     private async Task<string> SnapshotAsync(string connection)
     {
         await using var dbContext = database.CreateDbContext(connection);
-        var notices = (await dbContext.Notices.OrderBy(n => n.Id).Select(n => n.PublicationNumber).ToListAsync(Ct)).Select(n => $"notice {n}");
+        var notices = (await dbContext.Notices.AsNoTracking().OrderBy(n => n.Id).ToListAsync(Ct))
+            .Select(n => $"notice {n.PublicationNumber} {n.SubmissionDeadline} {n.PublicationDate} {n.Title} {n.UpdatedAt}");
         var documents = await dbContext.Documents.AsNoTracking().Include(d => d.Chunks).OrderBy(d => d.Id).ToListAsync(Ct);
         var chunks = documents.SelectMany(d => d.Chunks.OrderBy(c => c.Position)
             .Select(c => $"chunk {d.Id} {d.DocId} {c.Id} {c.PageNumber} {c.Text} {c.EmbeddingModel} {string.Join(',', c.Embedding!.ToArray())}"));
