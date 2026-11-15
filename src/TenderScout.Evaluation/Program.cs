@@ -19,6 +19,16 @@ if (args.Except([RetrievalOnly, WriteFixture, AgentCases]).Any())
 // The options are not passed to the host, which would read them as configuration.
 var builder = Host.CreateApplicationBuilder();
 
+// The file at Evaluation:GoldenSetPath may hold real tender text, which must not leave the machine: a run that answers
+// and judges it needs the local chat provider. It stops here, before it reads the file or calls a model, and no
+// setting turns this off. The other runs call no chat model or use the invented data of this repository.
+var hostedChat = !string.Equals(builder.Configuration["Chat:Provider"] ?? ChatModelOptions.Ollama, ChatModelOptions.Ollama, StringComparison.OrdinalIgnoreCase);
+if (hostedChat && !args.Contains(RetrievalOnly) && !args.Contains(WriteFixture) && !args.Contains(AgentCases))
+{
+    Console.Error.WriteLine($"A golden set is answered and judged by local models only: set Chat:Provider to {ChatModelOptions.Ollama}, or run {RetrievalOnly}.");
+    return 1;
+}
+
 builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<TenderScoutDbContext>("tenderscout", configureDbContextOptions: options => options.UsePgvector());
 
