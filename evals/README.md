@@ -58,6 +58,14 @@ paraphrased and literal ones. Every method gets the same question and tender; ve
 marks the highest one whose false refusals stay at or below 10%. The table uses similarity alone: `/ask` skips the
 threshold when a passage contains a number from the question, and the command counts those questions separately.
 
+**Candidate lists.** Hybrid search fuses up to 40 vector and 40 full-text candidates. Every row also records how
+many candidates each side gave, how many chunks are in both lists, and the rank of the first relevant chunk in each
+full list, not cut at 10. With a tender it records how many chunks of that tender have a vector, so a vector list
+shorter than both 40 and that number shows that the index cut it short. The summary prints how many questions have
+at least 5 chunks in both lists, the questions that vector search has in its top 5 and hybrid search does not, with
+their shared count and candidate ranks, and the lists cut short. These are numbers and ids only; they change no
+ranking.
+
 The table is a measurement, not a setting: the constant in `/ask` is changed by hand. It stays 0.45 for now. In the
 first run the number exception applied to every golden question, so no threshold was exercised, and the labels are
 not verified. The threshold will be calibrated after the exception is narrowed and the labels are verified.
@@ -81,8 +89,17 @@ dotnet run --project src/TenderScout.Evaluation
 
 The database must hold the imported and embedded documents. The command prints Markdown tables and writes
 `artifacts/eval/<UTC time>.json` (ignored by git) with the date, commit, model names, label counts, every metric and
-one row per question: ranks, similarity, refusal, citation counts and verdict. It holds ids only, no question,
-quote or passage text.
+one row per question: ranks, candidate counts and ranks, similarity, refusal, citation counts and verdict. It holds
+ids only, no question, quote or passage text.
+
+**Local chat only.** The golden set holds tender text, so its answers and their judging stay on the local Ollama: with
+`Chat:Provider` set to anything else, such as `OpenRouter`, the command stops before it reads the file or calls a
+model, and writes nothing. No setting turns this off. It applies to every file read through
+`Evaluation:GoldenSetPath`, because the command cannot tell real text from invented. `--retrieval-only` calls no chat
+model and the embeddings are always local, so it is not stopped; neither are `--agent-cases` and `--write-fixture`,
+which use the invented data of this repository. The check reads the provider's name, not the server's address: with
+`Chat:Provider` set to `Ollama` and `Chat:Endpoint` pointing at a hosted service, the run is not stopped, so keeping
+the endpoint local stays a rule of procedure.
 
 - `--retrieval-only` skips the answers and the judge, so only the embedding model is needed.
 - Without it, an unreachable chat model stops the command with an error after the search results are written.

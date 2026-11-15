@@ -1,4 +1,5 @@
 using System.Globalization;
+using TenderScout.Infrastructure.Persistence;
 
 namespace TenderScout.Evaluation;
 
@@ -24,6 +25,7 @@ public static class Summary
         lines.AddRange(evaluation.Calibration.Select(c => Invariant($"| {c.Threshold:F2} | {Format(c.FalseRefusals)} | {Format(c.CorrectRefusals)} |")));
         lines.Add(Invariant($"Chosen threshold (false refusals at most {Metrics.MaxFalseRefusalRate * 100:F0}%): {evaluation.ChosenThreshold?.ToString("F2", CultureInfo.InvariantCulture) ?? "none"}"));
         lines.Add($"Number exception (no early refusal): answerable {Format(evaluation.AnswerableWithNumberMatch)}, unanswerable {Format(evaluation.UnanswerableWithNumberMatch)}");
+        lines.AddRange(Diagnostics(evaluation.Questions));
 
         if (evaluation.Answers is { } a)
         {
@@ -88,6 +90,29 @@ public static class Summary
         {
             await output.WriteLineAsync(line).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// What the candidate lists of hybrid search explain, by question id: how many questions have a full top 5 of shared
+    /// candidates, the questions that vector search has in its top 5 and hybrid search does not, and the vector lists
+    /// that the index cut short.
+    /// </summary>
+    private static IEnumerable<string> Diagnostics(IReadOnlyList<QuestionResult> questions)
+    {
+        var lost = questions.Where(q => q.VectorRank <= Metrics.RecallCutoff && !(q.HybridRank <= Metrics.RecallCutoff))
+            .Select(q => Invariant($"{q.Id} (shared {q.SharedCandidates}, vector candidate rank {q.VectorCandidateRank}, full-text candidate rank {q.TextCandidateRank?.ToString(CultureInfo.InvariantCulture) ?? "none"})"))
+            .ToList();
+        var cutShort = questions
+            .Where(q => q.VectorCandidates < ChunkEmbeddingRepository.MaxSearchResults && q.VectorCandidates < q.TenderChunksWithVector)
+            .Select(q => q.Id)
+            .ToList();
+        return
+        [
+            string.Empty,
+            Invariant($"Questions with at least {Metrics.RecallCutoff} candidates in both lists: {questions.Count(q => q.SharedCandidates >= Metrics.RecallCutoff)} of {questions.Count}"),
+            $"In the vector top {Metrics.RecallCutoff}, not in the hybrid top {Metrics.RecallCutoff}: {(lost.Count == 0 ? "none" : string.Join(", ", lost))}",
+            $"Vector lists cut short by the index: {(cutShort.Count == 0 ? "none" : string.Join(", ", cutShort))}",
+        ];
     }
 
     private static string Format(Score score) => Invariant($"{score.Value:F2} of {score.Of}");

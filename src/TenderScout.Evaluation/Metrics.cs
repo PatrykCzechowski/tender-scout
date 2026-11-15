@@ -33,6 +33,27 @@ public sealed class QuestionResult
 
     /// <summary>The judge's verdict on an answer; <see langword="null"/> when not judged or when its reply was not valid JSON.</summary>
     public bool? Faithful { get; set; }
+
+    /// <summary>Candidates of the vector side that hybrid search fused, at most 40.</summary>
+    public int VectorCandidates { get; set; }
+
+    /// <summary>Candidates of the full-text side that hybrid search fused, at most 40.</summary>
+    public int TextCandidates { get; set; }
+
+    /// <summary>Chunks that are candidates of both sides.</summary>
+    public int SharedCandidates { get; set; }
+
+    /// <summary>One-based rank of the first relevant chunk in all the vector candidates, not cut at 10.</summary>
+    public int? VectorCandidateRank { get; set; }
+
+    /// <summary>One-based rank of the first relevant chunk in all the full-text candidates, not cut at 10.</summary>
+    public int? TextCandidateRank { get; set; }
+
+    /// <summary>
+    /// Chunks of the question's tender with a vector of the model; <see langword="null"/> without a tender. A vector
+    /// list shorter than both 40 and this number was cut short by the index.
+    /// </summary>
+    public int? TenderChunksWithVector { get; set; }
 }
 
 /// <summary>A share or mean, with the number of items it was computed over.</summary>

@@ -125,6 +125,11 @@ public sealed class EvaluationRunner(
             var hybridRanking = await repository.HybridSearchAsync(record.Question, vector, model, Metrics.MrrCutoff, tender, cancellationToken)
                 .ConfigureAwait(false);
 
+            // The diagnostics read the same two candidate lists that hybrid search fused, in full.
+            var vectorCandidates = (await repository.SearchAsync(vector, model, ChunkEmbeddingRepository.MaxSearchResults, tender, cancellationToken)
+                .ConfigureAwait(false)).Select(c => c.ChunkId).ToList();
+            var tenderChunks = tender is null ? (int?)null : await CountChunksWithVectorAsync(tender, model, cancellationToken).ConfigureAwait(false);
+
             var relevantIds = relevant.GetValueOrDefault(record.Id, []).Select(c => c.Id).ToHashSet();
             results.Add(new QuestionResult
             {
@@ -136,11 +141,23 @@ public sealed class EvaluationRunner(
                 HybridRank = Metrics.FirstRelevantRank(hybridRanking.Select(c => c.ChunkId), relevantIds),
                 Similarity = vectorRanking.Count > 0 ? vectorRanking[0].Score : 0,
                 NumberMatch = QuestionAnswerer.ContainsNumberFrom(record.Question, [.. hybridRanking.Take(QuestionAnswerer.PassageCount)]),
+                VectorCandidates = vectorCandidates.Count,
+                TextCandidates = textRanking.Count,
+                SharedCandidates = vectorCandidates.Intersect(textRanking).Count(),
+                VectorCandidateRank = Metrics.FirstRelevantRank(vectorCandidates, relevantIds),
+                TextCandidateRank = Metrics.FirstRelevantRank(textRanking, relevantIds),
+                TenderChunksWithVector = tenderChunks,
             });
         }
 
         return results;
     }
+
+    private Task<int> CountChunksWithVectorAsync(string publicationNumber, string model, CancellationToken cancellationToken) =>
+        dbContext.DocumentChunks.CountAsync(
+            c => c.Embedding != null && c.EmbeddingModel == model
+                && dbContext.Documents.Any(d => d.Id == c.DocumentId && d.PublicationNumber == publicationNumber),
+            cancellationToken);
 
     /// <summary>The chunks of each answerable record's document that contain its quote.</summary>
     private async Task<Dictionary<string, List<(long Id, int Page)>>> FindRelevantChunksAsync(
