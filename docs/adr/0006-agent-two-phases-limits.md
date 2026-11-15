@@ -122,7 +122,7 @@ and one question took 77 seconds.
 
 The decision and the limits above do not change. Only the instructions of the
 gathering phase changed, after the first run of the agent evaluation
-([README](../../README.md#evaluation)):
+([evaluation results](../evaluation-results.md#agent-tool-choices)):
 
 - **The week.** Next to today's date the model gets the dates of this week and of
   next week, Monday to Sunday, both ends included, from the same clock. Other
@@ -180,4 +180,4 @@ model"; the limits are the same for both.
   `openai/gpt-4.1-mini`, passed in 33 of 36 runs, against 24 of 36 for Bielik 11B
   with the same prompts; the two-step cases in 9 of 12, against 0 of 12. The hosted
   model searched the documents only after the notice search had answered. The
-  numbers and their limits are in the [README](../../README.md#evaluation).
+  numbers and their limits are in the [evaluation results](../evaluation-results.md#agent-tool-choices).
