@@ -176,7 +176,10 @@ async function readJson(response) {
 async function outcome(response, n) {
   if (response.status === 200) {
     const reply = await readJson(response);
-    return isReply(reply) ? { ok: true, content: answerContent(reply, n) } : { message: TEXT.failed };
+    // A conflict between the field and the question asks the user to correct the question, so it comes back too.
+    return isReply(reply)
+      ? { ok: true, content: answerContent(reply, n), correct: reply.refusalReason === 'fieldConflict' }
+      : { message: TEXT.failed };
   }
   if (response.status === 400) {
     const errors = (await readJson(response))?.errors ?? {};
@@ -216,13 +219,13 @@ async function ask(q, n) {
   if (pending !== request) return; // abandoned by "Nowy czat"
   pending = null;
   send.disabled = false;
-  // Text typed during the wait stays; a failed question comes back only into an empty field.
   if (result.ok) {
     finishEntry(entry, true, ...result.content);
   } else {
     finishEntry(entry, false, alertBox('alert', result.message));
-    if (question.value.trim() === '') question.value = q;
   }
+  // Text typed during the wait stays; a failed question, or one to correct, comes back only into an empty field.
+  if ((!result.ok || result.correct) && question.value.trim() === '') question.value = q;
   if (currentView() === 'asystent' && !question.hasAttribute('aria-invalid') && !number.hasAttribute('aria-invalid')) question.focus();
   updateSend();
 }
