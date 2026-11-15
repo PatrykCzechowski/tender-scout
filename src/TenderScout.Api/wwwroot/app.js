@@ -147,9 +147,9 @@ function tenderLine(reply) {
 
 function answerContent(reply, n) {
   if (reply.refused) {
-    // Several tenders in the question, or a tender without documents: the API's sentence says which, and nothing
-    // was searched, so the hint to ask without the number does not apply.
-    const notSearched = reply.refusalReason === 'severalTenders' || reply.refusalReason === 'noDocuments';
+    // Several tenders in the question, a tender without documents, or another number in the question than in the
+    // field: the API's sentence says which, and nothing was searched, so the hint to ask without the number does not apply.
+    const notSearched = ['severalTenders', 'noDocuments', 'fieldConflict'].includes(reply.refusalReason);
     const detail = notSearched ? reply.answer : n ? TEXT.refusedWithNumber : TEXT.refused;
     return [alertBox('alert soft', [notSearched ? TEXT.notSearchedTitle : TEXT.refusedTitle, detail]), ...tenderLine(reply)];
   }

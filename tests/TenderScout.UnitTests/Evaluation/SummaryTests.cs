@@ -45,6 +45,6 @@ public sealed class SummaryTests
 
         var text = output.ToString();
         Assert.Contains("Tender taken from the question text: 2 of 4", text, StringComparison.Ordinal);
-        Assert.Contains("Not searched, several tenders or a tender without documents: q-two, q-empty", text, StringComparison.Ordinal);
+        Assert.Contains("Not searched, a clear refusal of /ask: q-two, q-empty", text, StringComparison.Ordinal);
     }
 }

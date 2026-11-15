@@ -25,6 +25,7 @@ public sealed class EvaluationTenderTests(PostgresFixture database)
             deposit with { Id = "none" },
             deposit with { Id = "several", Question = deposit.Question + " (100101-2026, 100202-2026)" },
             deposit with { Id = "no-documents", Question = deposit.Question + " (100606-2026)" },
+            deposit with { Id = "conflict", Question = deposit.Question + " (100202-2026)", PublicationNumber = "100101-2026" },
         ];
 
         var rows = await scope.ServiceProvider.GetRequiredService<EvaluationRunner>().RetrieveAsync(records, Ct);
@@ -39,12 +40,12 @@ public sealed class EvaluationTenderTests(PostgresFixture database)
         }
 
         // The tender's 6 passages against all 30; a question ended with a clear answer is a refusal without ranks.
-        Assert.Equal([6, 6, 30, 0, 0], rows.Select(r => r.VectorCandidates));
+        Assert.Equal([6, 6, 30, 0, 0, 0], rows.Select(r => r.VectorCandidates));
         Assert.Equal(
             (rows[0].VectorRank, rows[0].TextRank, rows[0].HybridRank, rows[0].Similarity, rows[0].SharedCandidates),
             (rows[1].VectorRank, rows[1].TextRank, rows[1].HybridRank, rows[1].Similarity, rows[1].SharedCandidates));
         Assert.NotNull(rows[0].HybridRank);
-        Assert.Equal([null, null, null, RefusalReason.SeveralTenders, RefusalReason.NoDocuments], rows.Select(r => r.TenderRefusal));
+        Assert.Equal([null, null, null, RefusalReason.SeveralTenders, RefusalReason.NoDocuments, RefusalReason.FieldConflict], rows.Select(r => r.TenderRefusal));
         Assert.All(rows.Skip(3), r => Assert.Equal((true, (int?)null), (r.Refused ?? false, r.HybridRank)));
     }
 }

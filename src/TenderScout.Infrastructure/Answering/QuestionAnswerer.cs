@@ -107,15 +107,26 @@ public sealed partial class QuestionAnswerer(
 
     /// <summary>
     /// The tender a question is limited to: the number field when it is given, else the one tender number written in
-    /// the question, else none. Several numbers in the question, or a tender without a stored passage, end the question
-    /// with a clear answer before anything is searched or a model is called.
+    /// the question, else none. A field with another number in the question, several numbers in the question, or a
+    /// tender without a stored passage end the question with a clear answer before anything is searched or a model is
+    /// called.
     /// </summary>
     public async Task<TenderChoice> ChooseTenderAsync(string question, string? publicationNumber, CancellationToken cancellationToken)
     {
         var source = PublicationNumberSource.Field;
-        if (publicationNumber is null)
+        var named = TenderNumbersIn(question);
+        if (publicationNumber is not null)
         {
-            var named = TenderNumbersIn(question);
+            // Another number in the question than in the field: the model could name it while answering from the field.
+            var others = named.Where(n => n != publicationNumber).ToList();
+            if (others.Count > 0)
+            {
+                var conflict = $"W polu jest numer ogłoszenia {publicationNumber}, a w pytaniu {string.Join(", ", others)}. Zostaw jeden z nich.";
+                return new TenderChoice(null, null, new AskResponse(true, conflict, [], RefusalReason: RefusalReason.FieldConflict));
+            }
+        }
+        else
+        {
             if (named.Count > 1)
             {
                 var several = $"W pytaniu są różne numery ogłoszeń: {string.Join(", ", named)}. Podaj jeden numer w polu numeru ogłoszenia.";
