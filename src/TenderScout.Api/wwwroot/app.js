@@ -147,9 +147,9 @@ function tenderLine(reply) {
 
 function answerContent(reply, n) {
   if (reply.refused) {
-    // Several tenders in the question, or a tender without documents: the API's sentence says which, and nothing
-    // was searched, so the hint to ask without the number does not apply.
-    const notSearched = reply.refusalReason === 'severalTenders' || reply.refusalReason === 'noDocuments';
+    // Several tenders in the question, a tender without documents, or another number in the question than in the
+    // field: the API's sentence says which, and nothing was searched, so the hint to ask without the number does not apply.
+    const notSearched = ['severalTenders', 'noDocuments', 'fieldConflict'].includes(reply.refusalReason);
     const detail = notSearched ? reply.answer : n ? TEXT.refusedWithNumber : TEXT.refused;
     return [alertBox('alert soft', [notSearched ? TEXT.notSearchedTitle : TEXT.refusedTitle, detail]), ...tenderLine(reply)];
   }
@@ -176,7 +176,10 @@ async function readJson(response) {
 async function outcome(response, n) {
   if (response.status === 200) {
     const reply = await readJson(response);
-    return isReply(reply) ? { ok: true, content: answerContent(reply, n) } : { message: TEXT.failed };
+    // A conflict between the field and the question asks the user to correct the question, so it comes back too.
+    return isReply(reply)
+      ? { ok: true, content: answerContent(reply, n), correct: reply.refusalReason === 'fieldConflict' }
+      : { message: TEXT.failed };
   }
   if (response.status === 400) {
     const errors = (await readJson(response))?.errors ?? {};
@@ -216,13 +219,13 @@ async function ask(q, n) {
   if (pending !== request) return; // abandoned by "Nowy czat"
   pending = null;
   send.disabled = false;
-  // Text typed during the wait stays; a failed question comes back only into an empty field.
   if (result.ok) {
     finishEntry(entry, true, ...result.content);
   } else {
     finishEntry(entry, false, alertBox('alert', result.message));
-    if (question.value.trim() === '') question.value = q;
   }
+  // Text typed during the wait stays; a failed question, or one to correct, comes back only into an empty field.
+  if ((!result.ok || result.correct) && question.value.trim() === '') question.value = q;
   if (currentView() === 'asystent' && !question.hasAttribute('aria-invalid') && !number.hasAttribute('aria-invalid')) question.focus();
   updateSend();
 }

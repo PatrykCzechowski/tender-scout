@@ -114,7 +114,7 @@ public static class Summary
             $"In the vector top {Metrics.RecallCutoff}, not in the hybrid top {Metrics.RecallCutoff}: {(lost.Count == 0 ? "none" : string.Join(", ", lost))}",
             $"Vector lists cut short by the index: {(cutShort.Count == 0 ? "none" : string.Join(", ", cutShort))}",
             Invariant($"Tender taken from the question text: {questions.Count(q => q.TenderFromQuestion)} of {questions.Count}"),
-            $"Not searched, several tenders or a tender without documents: {(notSearched.Count == 0 ? "none" : string.Join(", ", notSearched))}",
+            $"Not searched, a clear refusal of /ask: {(notSearched.Count == 0 ? "none" : string.Join(", ", notSearched))}",
         ];
     }
 

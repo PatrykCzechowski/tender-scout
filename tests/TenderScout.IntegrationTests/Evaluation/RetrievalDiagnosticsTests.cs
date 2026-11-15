@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TenderScout.Evaluation;
+using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Persistence;
 using TenderScout.IntegrationTests.Answering;
 using TenderScout.Tests.Shared;
@@ -28,7 +29,9 @@ public sealed class RetrievalDiagnosticsTests(PostgresFixture database)
         // its tender in the text, so it is limited to that tender as /ask would limit it.
         Assert.Equal(["syn-q04"], all.Where(row => row.TenderFromQuestion).Select(row => row.Id));
         Assert.All(all, row => Assert.Equal(row.TenderFromQuestion ? (6, 6) : (30, null), (row.VectorCandidates, row.TenderChunksWithVector)));
-        Assert.All(filtered, row => Assert.Equal((6, 6), (row.VectorCandidates, row.TenderChunksWithVector)));
+        // With 100101-2026 given, the question that names another tender is a conflict and is not searched.
+        Assert.Equal(["syn-q04"], filtered.Where(row => row.TenderRefusal == RefusalReason.FieldConflict).Select(row => row.Id));
+        Assert.All(filtered, row => Assert.Equal(row.TenderRefusal is null ? (6, 6) : (0, null), (row.VectorCandidates, row.TenderChunksWithVector)));
         Assert.All(all.Concat(filtered), row =>
         {
             Assert.InRange(row.SharedCandidates, 0, Math.Min(row.VectorCandidates, row.TextCandidates));

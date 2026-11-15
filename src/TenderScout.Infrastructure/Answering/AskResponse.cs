@@ -5,7 +5,7 @@ namespace TenderScout.Infrastructure.Answering;
 /// <summary>An answer with its sources, or a refusal with a fixed message and no citations.</summary>
 /// <param name="PublicationNumber">
 /// The tender the search was limited to, or the one without documents; <see langword="null"/> when the search ran
-/// over all documents or the question named several tenders.
+/// over all documents, the question named several tenders, or it named another tender than the field.
 /// </param>
 /// <param name="PublicationNumberSource">Where that number came from; <see langword="null"/> exactly when it is.</param>
 /// <param name="RefusalReason">Why the question was not answered; <see langword="null"/> for an answer.</param>
@@ -46,4 +46,8 @@ public enum RefusalReason
     /// <summary>The tender has no stored passage; nothing was searched.</summary>
     [JsonStringEnumMemberName("noDocuments")]
     NoDocuments,
+
+    /// <summary>The question names another tender than the number field; nothing was searched.</summary>
+    [JsonStringEnumMemberName("fieldConflict")]
+    FieldConflict,
 }

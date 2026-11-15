@@ -337,10 +337,31 @@ public sealed partial class AskEndpointTests(PostgresFixture database)
     }
 
     [Theory]
-    [InlineData("Jakie wadium w 222222-2026?")]
-    [InlineData("Jakie wadium w 222222-2026 i w 333333-2026?")]
+    [InlineData("111111-2026", "Jakie wadium w 222222-2026?", "222222-2026")]
+    [InlineData("111111-2026", "Jakie wadium w 222222-2026 i w 333333-2026?", "222222-2026, 333333-2026")]
+    [InlineData("111111-2026", "Jakie wadium w 111111-2026, a jakie w 222222-2026?", "222222-2026")]
+    [InlineData("999999-2026", "Jakie wadium w 222222-2026?", "222222-2026")]
+    [InlineData("999999-2026", "Jakie wadium w 888888-2026?", "888888-2026")]
+    public async Task AnotherNumberInTheQuestionThanInTheField_IsAClearAnswer_WithoutSearchingOrAModel(string field, string question, string numbers)
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(1, 0)));
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question, publicationNumber = field }));
+
+        Assert.Equal(
+            (true, $"W polu jest numer ogłoszenia {field}, a w pytaniu {numbers}. Zostaw jeden z nich.", (string?)null, (PublicationNumberSource?)null, RefusalReason.FieldConflict),
+            (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
+        Assert.Empty(answer.Citations);
+        Assert.Empty(_generator.Calls);
+        Assert.Empty(_chat.Calls);
+    }
+
+    [Theory]
     [InlineData("Jakie wadium w 111111-2026?")]
-    public async Task NumberInTheField_Wins_WhateverTheQuestionNames(string question)
+    [InlineData("Jakie wadium w 111111-2026? Pytam o 111111-2026.")]
+    public async Task TheFieldsNumberInTheQuestion_IsNotAConflict(string question)
     {
         var connection = await SeedAsync(
             new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
@@ -376,7 +397,7 @@ public sealed partial class AskEndpointTests(PostgresFixture database)
         var answer = await ReadAnswerAsync(await AskAsync(connection, new { question }));
 
         Assert.Equal(
-            (true, $"W pytaniu są różne numery ogłoszeń: {numbers}. Podaj jeden numer w polu numeru ogłoszenia.", (string?)null, (PublicationNumberSource?)null, RefusalReason.SeveralTenders),
+            (true, $"W pytaniu są różne numery ogłoszeń: {numbers}. Zostaw w pytaniu jeden numer.", (string?)null, (PublicationNumberSource?)null, RefusalReason.SeveralTenders),
             (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
         Assert.Empty(answer.Citations);
         Assert.Empty(_generator.Calls);
@@ -429,7 +450,7 @@ public sealed partial class AskEndpointTests(PostgresFixture database)
         var reply = schemas.GetProperty(nameof(AskResponse)).GetProperty("properties");
         Assert.True(reply.TryGetProperty("publicationNumber", out _));
         Assert.Equal(["field", "question"], Values(schemas, reply, "publicationNumberSource"));
-        Assert.Equal(["noAnswer", "severalTenders", "noDocuments"], Values(schemas, reply, "refusalReason"));
+        Assert.Equal(["noAnswer", "severalTenders", "noDocuments", "fieldConflict"], Values(schemas, reply, "refusalReason"));
     }
 
     /// <summary>The string values of a nullable enum property: <c>oneOf</c> null or a reference to the enum's schema.</summary>
