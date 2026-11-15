@@ -1,4 +1,6 @@
 using MassTransit;
+using MassTransit.Logging;
+using MassTransit.Monitoring;
 using TenderScout.DocumentImport;
 using TenderScout.Infrastructure.Documents;
 using TenderScout.Infrastructure.Ingestion;
@@ -16,6 +18,11 @@ builder.Services.AddMassTransit(bus => bus.UsingTenderScoutRabbitMq(new Uri(rabb
 
 // Start the bus before the import publishes its first message.
 builder.Services.Configure<MassTransitHostOptions>(options => options.WaitUntilStarted = true);
+
+// The publish starts the document's trace; the Worker continues it from the message's headers.
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddSource(DiagnosticHeaders.DefaultListenerName))
+    .WithMetrics(metrics => metrics.AddMeter(InstrumentationOptions.MeterName));
 
 builder.Services.AddHostedService<DocumentImportWorker>();
 

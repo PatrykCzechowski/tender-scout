@@ -40,7 +40,12 @@ public static class EmbeddingServiceCollectionExtensions
         {
             var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName);
             var options = serviceProvider.GetRequiredService<IOptions<EmbeddingOptions>>().Value;
-            return new OllamaApiClient(httpClient, options.Model);
+
+            // One span and the duration and token metrics per batch; the texts and vectors are never recorded.
+            IEmbeddingGenerator<string, Embedding<float>> ollama = new OllamaApiClient(httpClient, options.Model);
+            return ollama.AsBuilder()
+                .UseOpenTelemetry(configure: telemetry => telemetry.EnableSensitiveData = false)
+                .Build(serviceProvider);
         });
 
         var builder = services.AddHttpClient(HttpClientName, (serviceProvider, httpClient) =>

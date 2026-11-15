@@ -34,25 +34,12 @@ public static class AnsweringServiceCollectionExtensions
 
         services.AddScoped<QuestionAnswerer>();
 
-        services.AddSingleton<IChatClient>(serviceProvider =>
-        {
-            var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName);
-            var options = serviceProvider.GetRequiredService<IOptions<ChatModelOptions>>().Value;
-            if (!options.IsOpenRouter)
-            {
-                return new OllamaApiClient(httpClient, options.Model);
-            }
-
-            // The SDK would repeat a failed request on its own, and each attempt is paid; the caller gets a 503 instead.
-            var openRouter = new OpenAIClient(new ApiKeyCredential(options.ApiKey!), new OpenAIClientOptions
-            {
-                Endpoint = new Uri(options.Endpoint),
-                Transport = new HttpClientPipelineTransport(httpClient),
-                RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
-                NetworkTimeout = options.RequestTimeout,
-            });
-            return new ProviderErrorsWithoutBody(openRouter.GetChatClient(options.Model).AsIChatClient());
-        });
+        // One span and the duration and token metrics per call to the model, for /ask and both phases of the agent.
+        // The texts of the messages are never recorded, whatever OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT says.
+        services.AddSingleton<IChatClient>(serviceProvider => CreateClient(serviceProvider)
+            .AsBuilder()
+            .UseOpenTelemetry(configure: telemetry => telemetry.EnableSensitiveData = false)
+            .Build(serviceProvider));
 
         var builder = services.AddHttpClient(HttpClientName, (serviceProvider, httpClient) =>
         {
@@ -70,5 +57,26 @@ public static class AnsweringServiceCollectionExtensions
 #pragma warning restore EXTEXP0001
 
         return builder;
+    }
+
+    /// <summary>The client of the configured provider; an OpenRouter error reaches the telemetry with its status only.</summary>
+    private static IChatClient CreateClient(IServiceProvider serviceProvider)
+    {
+        var httpClient = serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName);
+        var options = serviceProvider.GetRequiredService<IOptions<ChatModelOptions>>().Value;
+        if (!options.IsOpenRouter)
+        {
+            return new OllamaApiClient(httpClient, options.Model);
+        }
+
+        // The SDK would repeat a failed request on its own, and each attempt is paid; the caller gets a 503 instead.
+        var openRouter = new OpenAIClient(new ApiKeyCredential(options.ApiKey!), new OpenAIClientOptions
+        {
+            Endpoint = new Uri(options.Endpoint),
+            Transport = new HttpClientPipelineTransport(httpClient),
+            RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
+            NetworkTimeout = options.RequestTimeout,
+        });
+        return new ProviderErrorsWithoutBody(openRouter.GetChatClient(options.Model).AsIChatClient());
     }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
@@ -160,6 +161,7 @@ public sealed partial class TenderAgent(
         var started = timeProvider.GetTimestamp();
         var failed = true;
         Exception? failure = null;
+        Exception? rejected = null;
         try
         {
             var result = await context.Function.InvokeAsync(context.Arguments, cancellationToken).ConfigureAwait(false);
@@ -177,6 +179,7 @@ public sealed partial class TenderAgent(
         catch (McpException exception)
         {
             // The tool's own message names the parameter and the rule, so the model can correct the call.
+            rejected = exception;
             return exception.Message;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -186,6 +189,13 @@ public sealed partial class TenderAgent(
         }
         finally
         {
+            // The failure is answered to the model instead of thrown, so the framework's span of this tool execution
+            // would end as a success; it gets the error status and type, without the message.
+            if ((failure ?? rejected) is { } error)
+            {
+                Activity.Current?.SetStatus(ActivityStatusCode.Error).SetTag("error.type", error.GetType().FullName);
+            }
+
             run.Record(logger, failure, context.CallContent, (long)timeProvider.GetElapsedTime(started).TotalMilliseconds, failed);
         }
     }
