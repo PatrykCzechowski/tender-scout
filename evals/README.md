@@ -21,7 +21,7 @@ One JSON object per line, in snake_case:
 | `answerable` | `false` when no indexed document holds the answer |
 | `paraphrase` | `true` when the question shares no content word with its quote |
 | `doc_id` | Manifest id of the document with the answer |
-| `publication_number` | The tender the question is about; search and `/ask` are limited to it, as in the API |
+| `publication_number` | The tender the question is about; search and `/ask` are limited to it, as in the API. Without it the tender the question names is used, as `/ask` does |
 | `page` | One-based PDF page of the quote |
 | `quote` | Verbatim text of at most 200 characters from one paragraph, with no personal data |
 | `label_source` | `auto` for a drafted label, `verified` once a person has checked it against the PDF |
@@ -65,6 +65,12 @@ shorter than both 40 and that number shows that the index cut it short. The summ
 at least 5 chunks in both lists, the questions that vector search has in its top 5 and hybrid search does not, with
 their shared count and candidate ranks, and the lists cut short. These are numbers and ids only; they change no
 ranking.
+
+**The tender of a question.** Every question is limited to the tender `/ask` would choose: its `publication_number`,
+or, when the record has none, the one tender number its question names. A question that names several tenders, or a
+tender without documents, gets a clear refusal from `/ask` without a search; the evaluation counts it as refused with
+no relevant result. The summary prints how many tenders came from the question text and lists the questions that were
+not searched.
 
 The table is a measurement, not a setting: the constant in `/ask` is changed by hand. It stays 0.45 for now. In the
 first run the number exception applied to every golden question, so no threshold was exercised, and the labels are
