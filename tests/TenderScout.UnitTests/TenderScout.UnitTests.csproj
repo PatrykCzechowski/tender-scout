@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TenderScout.Evaluation\TenderScout.Evaluation.csproj" />
     <ProjectReference Include="..\..\src\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\TenderScout.Worker\TenderScout.Worker.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />

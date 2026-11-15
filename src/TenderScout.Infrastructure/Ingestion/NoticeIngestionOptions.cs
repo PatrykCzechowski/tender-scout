@@ -7,6 +7,12 @@ public sealed class NoticeIngestionOptions
 {
     public const string SectionName = "Ingestion";
 
+    /// <summary>
+    /// Whether the worker polls TED. False stops the first poll and every later one; the consumers of the queue keep
+    /// running. The compose demo sets it to false, so it holds invented data only.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     /// <summary>Time between two TED polls. The first poll runs at startup.</summary>
     public TimeSpan PollingInterval { get; set; } = TimeSpan.FromHours(1);
 
