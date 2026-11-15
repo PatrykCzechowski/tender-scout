@@ -26,6 +26,9 @@
 .ai-text, .quote blockquote { white-space: pre-line; overflow-wrap: anywhere; }
 .term-v { overflow-wrap: anywhere; }
 
+/* The tender an answer was limited to, under the answer. */
+.tender-used { margin: 6px 0 0; color: var(--ink-2); font-size: 12.5px; }
+
 /* Waiting: elapsed seconds next to the design's pulse. */
 .toolchip .secs { font-variant-numeric: tabular-nums; }
 .send:disabled { cursor: wait; }

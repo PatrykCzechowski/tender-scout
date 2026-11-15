@@ -19,6 +19,8 @@ const TEXT = {
   refusedTitle: 'W dokumentach nie ma odpowiedzi',
   refused: 'Nie znalazłem fragmentu SWZ, który odpowiada na to pytanie, więc nie zgaduję. Spróbuj zapytać inaczej.',
   refusedWithNumber: 'Nie znalazłem fragmentu SWZ, który odpowiada na to pytanie, więc nie zgaduję. Spróbuj zapytać inaczej albo bez numeru ogłoszenia.',
+  notSearchedTitle: 'Nie przeszukałem dokumentów',
+  tenderFrom: { field: 'numer z pola', question: 'numer z pytania' },
   invalid: ['Nie udało się wysłać pytania', 'Sprawdź pytanie i numer ogłoszenia.'],
   unavailable: ['Model jest teraz niedostępny', 'Spróbuj ponownie za chwilę.'],
   timeout: ['Odpowiedź nie przyszła w ciągu 2 minut', 'Przerwałem czekanie. Spróbuj ponownie za chwilę.'],
@@ -136,11 +138,22 @@ function sourceRow(c, i) {
     button, quote);
 }
 
+// The tender the API limited the question to and where its number came from, as the reply says; the page itself
+// never looks for numbers in the question.
+function tenderLine(reply) {
+  const from = TEXT.tenderFrom[reply.publicationNumberSource];
+  return reply.publicationNumber && from ? [el('p', { class: 'tender-used' }, 'Ogłoszenie ' + reply.publicationNumber + ' (' + from + ')')] : [];
+}
+
 function answerContent(reply, n) {
   if (reply.refused) {
-    return [alertBox('alert soft', [TEXT.refusedTitle, n ? TEXT.refusedWithNumber : TEXT.refused])];
+    // Several tenders in the question, or a tender without documents: the API's sentence says which, and nothing
+    // was searched, so the hint to ask without the number does not apply.
+    const notSearched = reply.refusalReason === 'severalTenders' || reply.refusalReason === 'noDocuments';
+    const detail = notSearched ? reply.answer : n ? TEXT.refusedWithNumber : TEXT.refused;
+    return [alertBox('alert soft', [notSearched ? TEXT.notSearchedTitle : TEXT.refusedTitle, detail]), ...tenderLine(reply)];
   }
-  const content = [el('p', { class: 'ai-text' }, reply.answer)];
+  const content = [el('p', { class: 'ai-text' }, reply.answer), ...tenderLine(reply)];
   const citations = reply.citations.filter(c => c && typeof c === 'object');
   if (citations.length > 0) {
     content.push(el('div', { class: 'rich' }, el('h3', null, icon('doc', 14), 'Źródła'),
