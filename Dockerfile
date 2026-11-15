@@ -22,6 +22,9 @@ RUN dotnet restore src/TenderScout.Api \
 
 # Framework-dependent and without a runtime identifier: the same file builds on amd64 and arm64.
 COPY src/ src/
+# The invented demo data, which the migrations image loads with --demo-data. Its project file links them.
+COPY evals/agent/notices.jsonl evals/agent/
+COPY tests/TenderScout.IntegrationTests/Evaluation/synthetic-passages.jsonl tests/TenderScout.IntegrationTests/Evaluation/
 RUN dotnet publish src/TenderScout.Api --configuration Release --no-restore --output /app/api \
     && dotnet publish src/TenderScout.Mcp --configuration Release --no-restore --output /app/mcp \
     && dotnet publish src/TenderScout.Worker --configuration Release --no-restore --output /app/worker \
@@ -53,6 +56,7 @@ USER $APP_UID
 ENTRYPOINT ["dotnet", "TenderScout.Worker.dll"]
 
 # Applies the database migrations and exits. Run it once, before the other three.
+# With the argument --demo-data it loads the invented demo data into a migrated, empty database instead.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS migrations
 WORKDIR /app
 COPY --from=build /app/migrations .

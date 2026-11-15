@@ -57,11 +57,11 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:5150/", "https://localhost:7150/"],
-      "webOrigins": ["http://localhost:5150", "https://localhost:7150"],
+      "redirectUris": ["http://localhost:5150/", "https://localhost:7150/", "http://localhost:15150/", "http://localhost:25150/"],
+      "webOrigins": ["http://localhost:5150", "https://localhost:7150", "http://localhost:15150", "http://localhost:25150"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:5150/##https://localhost:7150/",
+        "post.logout.redirect.uris": "http://localhost:5150/##https://localhost:7150/##http://localhost:15150/##http://localhost:25150/",
         "use.refresh.tokens": "false"
       },
       "defaultClientScopes": [],
