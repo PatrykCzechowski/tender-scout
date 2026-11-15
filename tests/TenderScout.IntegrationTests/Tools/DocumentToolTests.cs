@@ -67,6 +67,20 @@ public sealed class DocumentToolTests(PostgresFixture database)
     }
 
     [Fact]
+    public async Task TenderNumberOnlyInTheQuery_DoesNotLimitTheSearch()
+    {
+        var connection = await SeedAsync(
+            database,
+            new Chunk("111111-2026", "swz-a", 1, "Wadium wynosi 10 000 zł.", Vector(1, 0)),
+            new Chunk("222222-2026", "swz-b", 2, "Wadium wynosi 20 000 zł.", Vector(0.8f, 0.2f)));
+        await using var mcp = await McpTestHost.StartAsync(connection, _generator);
+
+        var passages = await SearchAsync(mcp, new { query = "Jakie wadium w 222222-2026?" });
+
+        Assert.Equal(["swz-a", "swz-b"], passages.Select(p => p.DocId).Order());
+    }
+
+    [Fact]
     public async Task Limit_CapsThePassages()
     {
         var connection = await SeedAsync(database, [.. Enumerable.Range(1, 12).Select(i =>
