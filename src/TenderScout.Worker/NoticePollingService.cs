@@ -15,6 +15,12 @@ public sealed partial class NoticePollingService(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!options.Value.Enabled)
+        {
+            LogDisabled(logger);
+            return;
+        }
+
         var interval = options.Value.PollingInterval;
         LogStarted(logger, interval, options.Value.LookBackDays);
 
@@ -41,6 +47,9 @@ public sealed partial class NoticePollingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Polling TED every {Interval}, looking back {LookBackDays} days")]
     private static partial void LogStarted(ILogger logger, TimeSpan interval, int lookBackDays);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Polling TED is switched off (Ingestion:Enabled is false)")]
+    private static partial void LogDisabled(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "TED poll failed; retrying on the next tick")]
     private static partial void LogPollFailed(ILogger logger, Exception exception);

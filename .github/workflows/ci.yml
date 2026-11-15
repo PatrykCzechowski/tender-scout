@@ -73,3 +73,7 @@ jobs:
 
       - name: Build and check the images
         run: scripts/check-images.sh
+
+      # The same images as one compose project, with the demo data, without a model and without TED.
+      - name: Start the compose demo and check it
+        run: scripts/check-compose.sh

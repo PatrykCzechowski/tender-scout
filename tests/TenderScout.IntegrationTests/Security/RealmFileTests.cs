@@ -29,7 +29,7 @@ public sealed class RealmFileTests
     }
 
     [Fact]
-    public void PageClient_IsPublic_SignsInWithACodeAndPkceOnly_AndReturnsToThePagesTwoLocalAddresses()
+    public void PageClient_IsPublic_SignsInWithACodeAndPkceOnly_AndReturnsToThePagesLocalAddressesOnly()
     {
         var client = Client("tender-scout-web");
 
@@ -37,8 +37,11 @@ public sealed class RealmFileTests
         Assert.False(client.TryGetProperty("secret", out _));
         Assert.Equal((true, false, false, false), Flows(client));
         Assert.Equal("S256", client.GetProperty("attributes").GetProperty("pkce.code.challenge.method").GetString());
-        Assert.Equal(["http://localhost:5150/", "https://localhost:7150/"], Texts(client, "redirectUris"));
-        Assert.Equal(["http://localhost:5150", "https://localhost:7150"], Texts(client, "webOrigins"));
+        // The AppHost's two addresses, then the compose demo's default port and its alternative for a second demo.
+        string[] pages = ["http://localhost:5150", "https://localhost:7150", "http://localhost:15150", "http://localhost:25150"];
+        Assert.Equal([.. pages.Select(page => page + "/")], Texts(client, "redirectUris"));
+        Assert.Equal(pages, Texts(client, "webOrigins"));
+        Assert.Equal(string.Join("##", pages.Select(page => page + "/")), client.GetProperty("attributes").GetProperty("post.logout.redirect.uris").GetString());
         Assert.Equal(BothScopes, Texts(client, "optionalClientScopes"));
         Assert.Empty(Texts(client, "defaultClientScopes"));
     }

@@ -7,6 +7,9 @@
 !global.json
 !Directory.Build.props
 !Directory.Packages.props
+# The two files of invented demo data that the migrations image carries.
+!evals/agent/notices.jsonl
+!tests/TenderScout.IntegrationTests/Evaluation/synthetic-passages.jsonl
 
 # Left out inside src/: build output, and settings of one machine or one environment.
 **/bin/

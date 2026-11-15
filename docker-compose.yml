@@ -1,0 +1,139 @@
+# The whole system on invented demo data, on one machine: docker compose up --build
+# What it starts, the settings and the limits are in the README, section "Run the demo".
+#
+# Every setting below that names a variable, as ${API_PORT:-15150}, can be changed in the shell or in a file
+# .env next to this one, which git ignores. Without either, the defaults after ":-" apply.
+name: tender-scout-demo
+
+services:
+  # The database and the broker are reachable only from the containers of this project: no port is published, so
+  # PostgreSQL trusts every connection and RabbitMQ takes its built-in user, and no password is written anywhere.
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: tenderscout
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP: during its first start the database listens on its local socket only, before it is ready.
+      test: ["CMD", "pg_isready", "--quiet", "--host", "localhost", "--username", "postgres", "--dbname", "tenderscout"]
+      interval: 2s
+      retries: 60
+
+  rabbitmq:
+    image: rabbitmq:4.3
+    environment:
+      # The built-in user "guest" may otherwise connect from the broker's own machine only.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit loopback_users []
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "--quiet", "check_port_connectivity"]
+      interval: 5s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # The browser reaches Keycloak at this address, so it is the issuer in every token. The services fetch the
+      # keys over the network of this project instead, which the dynamic back channel allows.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-18180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    ports:
+      - 127.0.0.1:${KEYCLOAK_PORT:-18180}:8080
+    healthcheck:
+      # The image has no curl. Bash sends the request; ready means that the realm file has been imported too.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      interval: 5s
+      retries: 60
+
+  # Two one-off jobs from the migrations image, in this order: the schema, then the demo data. Each ends; the
+  # services start only after both ended with code 0.
+  migrations:
+    image: tender-scout-migrations
+    build: { context: ., target: migrations }
+    environment:
+      ConnectionStrings__tenderscout: &database Host=postgres;Database=tenderscout;Username=postgres
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  demo-data:
+    image: tender-scout-migrations
+    build: { context: ., target: migrations }
+    command: ["--demo-data"]
+    environment:
+      ConnectionStrings__tenderscout: *database
+    depends_on:
+      migrations: { condition: service_completed_successfully }
+
+  api:
+    image: tender-scout-api
+    build: { context: ., target: api }
+    # See ADR-0007: with Docker Desktop on an Apple Silicon Mac a crashed process was seen to keep running without it.
+    init: true
+    environment:
+      ConnectionStrings__tenderscout: *database
+      Authentication__Schemes__Bearer__Authority: &issuer http://localhost:${KEYCLOAK_PORT:-18180}/realms/tender-scout
+      Authentication__Schemes__Bearer__MetadataAddress: &metadata http://keycloak:8080/realms/tender-scout/.well-known/openid-configuration
+      Authentication__Schemes__Bearer__ValidAudiences__0: tender-scout-api
+      Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
+      WebSignIn__ClientId: tender-scout-web
+      Embedding__Endpoint: &ollama ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
+      Embedding__Model: bge-m3
+      Chat__Provider: ${CHAT_PROVIDER:-Ollama}
+      Chat__Endpoint: ${CHAT_ENDPOINT:-${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}}
+      Chat__Model: ${CHAT_MODEL:-SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0}
+      Agent__Model: ${AGENT_MODEL:-SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M}
+      # Only the API talks to a hosted chat model, so only the API gets its key.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    extra_hosts: &host ["host.docker.internal:host-gateway"]
+    ports:
+      - 127.0.0.1:${API_PORT:-15150}:8080
+    healthcheck: &health
+      # The image has no curl. Bash sends the request and reads the status line.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      interval: 5s
+      retries: 30
+    depends_on: &afterDemoData
+      demo-data: { condition: service_completed_successfully }
+      keycloak: { condition: service_healthy }
+
+  mcp:
+    image: tender-scout-mcp
+    build: { context: ., target: mcp }
+    init: true
+    environment:
+      ConnectionStrings__tenderscout: *database
+      Authentication__Schemes__Bearer__Authority: *issuer
+      Authentication__Schemes__Bearer__MetadataAddress: *metadata
+      Authentication__Schemes__Bearer__ValidAudiences__0: tender-scout-api
+      Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
+      Embedding__Endpoint: *ollama
+      Embedding__Model: bge-m3
+    extra_hosts: *host
+    ports:
+      - 127.0.0.1:${MCP_PORT:-15151}:8080
+    healthcheck: *health
+    depends_on: *afterDemoData
+
+  worker:
+    image: tender-scout-worker
+    build: { context: ., target: worker }
+    init: true
+    environment:
+      ConnectionStrings__tenderscout: *database
+      ConnectionStrings__messaging: amqp://rabbitmq:5672
+      Embedding__Endpoint: *ollama
+      Embedding__Model: bge-m3
+      # Off, so the demo holds the invented data only. True fetches real notices from TED every hour.
+      Ingestion__Enabled: ${INGESTION_ENABLED:-false}
+    extra_hosts: *host
+    depends_on:
+      demo-data: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+
+volumes:
+  postgres-data:

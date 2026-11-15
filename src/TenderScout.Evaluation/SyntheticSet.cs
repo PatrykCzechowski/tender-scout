@@ -21,42 +21,12 @@ public static class SyntheticSet
     public const string QuestionsFile = "synthetic-questions.jsonl";
 
     /// <summary>The model the stored vectors come from.</summary>
-    public const string EmbeddingModel = "bge-m3";
+    public const string EmbeddingModel = DemoData.EmbeddingModel;
 
     /// <summary>Four decimals keep the file small; the README records that rounding changed no ranking.</summary>
     private const int Decimals = 4;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
-    private static readonly JsonSerializerOptions SnakeCase = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-
-    /// <summary>
-    /// Adds every passage of the file to the context, as a chunk of its document with its stored vector. The
-    /// caller saves.
-    /// </summary>
-    public static void AddPassages(TenderScoutDbContext dbContext, string path)
-    {
-        ArgumentNullException.ThrowIfNull(dbContext);
-
-        var passages = File.ReadLines(path)
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => JsonSerializer.Deserialize<Passage>(line, SnakeCase)!);
-        foreach (var group in passages.GroupBy(p => (p.DocId, p.PublicationNumber)))
-        {
-            var document = DocumentEntity.Create(
-                new TenderDocument(group.Key.DocId, group.Key.PublicationNumber, "swz", "a.pdf", new string('a', 64), null),
-                DateTimeOffset.UnixEpoch);
-            document.Chunks.AddRange(group.Select((p, position) => new DocumentChunkEntity
-            {
-                Position = position,
-                PageNumber = p.Page,
-                Text = p.Text,
-                Embedding = new Pgvector.Vector(p.Vector),
-                EmbeddingModel = EmbeddingModel,
-            }));
-            dbContext.Documents.Add(document);
-        }
-    }
 
     /// <summary>Embeds the <c>text</c> of every passage and the <c>question</c> of every question and stores the vectors.</summary>
     public static async Task WriteVectorsAsync(
@@ -82,5 +52,4 @@ public static class SyntheticSet
         }
     }
 
-    private sealed record Passage(string DocId, string PublicationNumber, int Page, string Text, float[] Vector);
 }
