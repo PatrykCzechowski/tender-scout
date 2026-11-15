@@ -3,7 +3,7 @@
 ## Status
 
 Accepted — 2026-11-10, amended 2026-11-10 (answer length limit, first golden-set measurement of the threshold),
-amended 2026-11-15 (the tender named in the question)
+amended 2026-11-15 (the tender named in the question, and its conflict with the field)
 
 ## Context
 
@@ -148,6 +148,12 @@ without documents, from the question or the field (`noDocuments`). The reply nam
 the tender used, where its number came from and why a question was refused. The
 prompt, the passage count, the threshold and the digit exception do not change, and
 the question is passed on as written.
+
+Corrected the same day: the field does not always win. When the question names another
+tender than the field, the model could answer from the field's tender and still write
+the other number in its sentence. Such a request now gets a third refusal before any
+search or model call, `fieldConflict`, which names both numbers and asks to keep one.
+The field's own number in the question is not a conflict.
 
 ## Consequences
 

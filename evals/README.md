@@ -67,10 +67,10 @@ their shared count and candidate ranks, and the lists cut short. These are numbe
 ranking.
 
 **The tender of a question.** Every question is limited to the tender `/ask` would choose: its `publication_number`,
-or, when the record has none, the one tender number its question names. A question that names several tenders, or a
-tender without documents, gets a clear refusal from `/ask` without a search; the evaluation counts it as refused with
-no relevant result. The summary prints how many tenders came from the question text and lists the questions that were
-not searched.
+or, when the record has none, the one tender number its question names. A question that names several tenders, a
+tender without documents, or another tender than its `publication_number`, gets a clear refusal from `/ask` without
+a search; the evaluation counts it as refused with no relevant result. The summary prints how many tenders came from
+the question text and lists the questions that were not searched.
 
 The table is a measurement, not a setting: the constant in `/ask` is changed by hand. It stays 0.45 for now. In the
 first run the number exception applied to every golden question, so no threshold was exercised, and the labels are

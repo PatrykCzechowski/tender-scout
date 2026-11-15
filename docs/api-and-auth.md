@@ -98,8 +98,8 @@ A refusal is also 200, with `"refused": true`, the answer `Nie znalazłem odpowi
 and `"refusalReason": "noAnswer"`. Invalid input gives 400 with problem details naming the field; an unreachable model
 gives 503. The API starts with Ollama off. An answer takes several seconds; the example above is invented.
 
-**Which tender a question is limited to.** The field always wins. When it is empty, a tender number written in the
-question is used instead: 1 to 6 digits, a hyphen and a year from 1900 to 2099, standing on its own. A date such as
+**Which tender a question is limited to.** The field is used when the question names no other tender. When it is
+empty, a tender number written in the question is used instead: 1 to 6 digits, a hyphen and a year from 1900 to 2099, standing on its own. A date such as
 `15-12-2026`, a reference such as `ZP.271.5-2026`, `100101/2026` or a number touching a letter does not count. A
 tender is known when at least one passage of its documents is stored; the notices are not asked.
 
@@ -108,11 +108,13 @@ tender is known when at least one passage of its documents is stored; the notice
 | empty | none | Search over all documents; `publicationNumber` and `publicationNumberSource` are `null` |
 | empty | one, with documents | Limited to it, `publicationNumberSource` `"question"`; otherwise the same reply as with that number in the field |
 | empty | two or more different | Refusal `"severalTenders"`: `W pytaniu są różne numery ogłoszeń: 111111-2026, 222222-2026. Podaj jeden numer w polu numeru ogłoszenia.` |
-| a number with documents | any | Limited to the field's tender, `publicationNumberSource` `"field"`; numbers in the question are not used |
+| a number | none, or only the field's number | Limited to the field's tender, `publicationNumberSource` `"field"` |
+| a number | at least one other number | Refusal `"fieldConflict"`: `W polu jest numer ogłoszenia 111111-2026, a w pytaniu 222222-2026. Zostaw jeden z nich.`, naming the other numbers in the order of the question; `publicationNumber` and `publicationNumberSource` are `null` |
 | a number without documents, from the field or the question | — | Refusal `"noDocuments"`: `Nie mam dokumentów ogłoszenia 999999-2026.`, naming that number and where it came from |
 
-The two refusals `"severalTenders"` and `"noDocuments"` search nothing and call no model, so they work with Ollama
-off. The question is passed to the search and to the model as it was written. `publicationNumber` is `null` exactly
+A conflict between the field and the question is found before the documents are checked, so a field without
+documents and another number in the question give `"fieldConflict"`. The three refusals `"severalTenders"`,
+`"fieldConflict"` and `"noDocuments"` search nothing and call no model, so they work with Ollama off. The question is passed to the search and to the model as it was written. `publicationNumber` is `null` exactly
 when `publicationNumberSource` is.
 
 The API describes its endpoints in an OpenAPI document at `/openapi/v1.json`. In the Development environment
@@ -153,7 +155,9 @@ views, and the part of the address after `#` says which one is shown:
 - **Asystent** (`#asystent`): sends each question to `POST /ask`, optionally limited to one tender by its publication
   number, and shows the answer with its sources (document, tender, page and the passage), a refusal, or what went
   wrong. Under an answer or a refusal limited to one tender a line names it and says whether the number came from the
-  field or from the question; for several tenders or a tender without documents it shows the API's sentence. Each question is answered on its own and nothing is saved; the next question can be typed while one waits.
+  field or from the question; for several tenders, a conflict between the field and the question or a tender without
+  documents it shows the API's sentence. Each question is answered on its own and nothing is saved; the next question
+  can be typed while one waits.
 
 The notice views read `GET /notices`. The assistant needs both models, like `/ask`. The page is plain HTML, CSS and
 JavaScript in `src/TenderScout.Api/wwwroot`, with no build step.
