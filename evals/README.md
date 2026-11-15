@@ -97,7 +97,9 @@ ids only, no question, quote or passage text.
 model, and writes nothing. No setting turns this off. It applies to every file read through
 `Evaluation:GoldenSetPath`, because the command cannot tell real text from invented. `--retrieval-only` calls no chat
 model and the embeddings are always local, so it is not stopped; neither are `--agent-cases` and `--write-fixture`,
-which use the invented data of this repository.
+which use the invented data of this repository. The check reads the provider's name, not the server's address: with
+`Chat:Provider` set to `Ollama` and `Chat:Endpoint` pointing at a hosted service, the run is not stopped, so keeping
+the endpoint local stays a rule of procedure.
 
 - `--retrieval-only` skips the answers and the judge, so only the embedding model is needed.
 - Without it, an unreachable chat model stops the command with an error after the search results are written.
