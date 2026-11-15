@@ -141,7 +141,7 @@ public sealed class AgentEvaluationRunner(
 
         await dbContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
         dbContext.Notices.AddRange(caseSet.Notices.Select(notice => NoticeEntity.Create(notice, timeProvider.GetUtcNow())));
-        SyntheticSet.AddPassages(dbContext, passagesFile);
+        DemoData.AddPassages(dbContext, passagesFile);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return true;
     }

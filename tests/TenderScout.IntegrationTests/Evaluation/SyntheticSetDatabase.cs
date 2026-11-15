@@ -24,7 +24,7 @@ internal static class SyntheticSetDatabase
     {
         var connection = await database.CreateIsolatedDatabaseAsync();
         await using var dbContext = database.CreateDbContext(connection);
-        SyntheticSet.AddPassages(dbContext, Path.Combine(AppContext.BaseDirectory, "Evaluation", SyntheticSet.PassagesFile));
+        DemoData.AddPassages(dbContext, Path.Combine(AppContext.BaseDirectory, "Evaluation", SyntheticSet.PassagesFile));
         await dbContext.SaveChangesAsync(cancellationToken);
         return connection;
     }

@@ -6,6 +6,11 @@
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The invented demo data, from the files the evaluation already uses; loaded with the demo-data option. -->
+    <None Include="..\..\evals\agent\notices.jsonl" Link="demo\notices.jsonl" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\tests\TenderScout.IntegrationTests\Evaluation\synthetic-passages.jsonl" Link="demo\synthetic-passages.jsonl" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\TenderScout.Infrastructure\TenderScout.Infrastructure.csproj" />
     <ProjectReference Include="..\TenderScout.ServiceDefaults\TenderScout.ServiceDefaults.csproj" />
   </ItemGroup>
