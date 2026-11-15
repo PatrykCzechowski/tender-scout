@@ -6,11 +6,18 @@ gives the same data to other agents.
 
 ## Showcase
 
-<!-- Screenshots and a GIF of the compose demo go here, stored in docs/images/demo/: the inbox, the calendar of
-deadlines, one answer with its citations, and a short GIF of asking that question. See "Run the demo" for how they
-are taken. -->
+Taken from the compose demo below, on its invented data, signed in as the local test user.
 
-_To be added: screenshots of the inbox, the calendar and an answer with citations, and a GIF of asking a question._
+![Inbox: the ten invented tenders by deadline, with one tender chosen and the questions that can be asked about its documents](docs/images/demo/inbox.png)
+
+![Start page: counts of open tenders and the calendar of submission deadlines, with the first demo deadline, 11 December, chosen](docs/images/demo/calendar.png)
+
+![Assistant: the answer "Wysokość wadium wynosi 9 000,00 zł." with its source, document syn-01 page 10, and the quoted passage](docs/images/demo/answer.png)
+
+![Asking "Jaka jest wysokość wadium?" about tender 100101-2026 and getting the answer with its source](docs/images/demo/ask.gif)
+
+The answer came from Bielik 4.5B v3 (`Q8_0`) on Ollama, the demo's default chat model, in less than 20 seconds. The
+GIF is a series of screenshots of that one run and shortens the wait.
 
 ## Run the demo
 
