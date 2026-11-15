@@ -119,8 +119,8 @@ public sealed class DocumentTraceTests
                 trace = publish is null ? [] : [.. spans.Where(s => s.TraceId == publish.TraceId)];
             }
 
-            // A process span is exported when it ends, after the spans below it.
-            if (trace.Any(s => s.DisplayName.EndsWith("EmbeddingStep process", StringComparison.Ordinal)
+            // A span is exported when it ends, after the spans below it: the second consumer's receive span ends last.
+            if (trace.Any(s => s.DisplayName.EndsWith("EmbeddingStep receive", StringComparison.Ordinal)
                 || (s.DisplayName.EndsWith("UploadStep process", StringComparison.Ordinal) && s.Status == ActivityStatusCode.Error)))
             {
                 return trace;
