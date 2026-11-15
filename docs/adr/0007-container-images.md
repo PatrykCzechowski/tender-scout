@@ -9,7 +9,7 @@ Amended 2026-11-15: the four images now also run together from a root
 files of demo data, which the migrations image loads with `--demo-data`. Compose checks
 `/health` with a bash request, as the images still hold no HTTP tool and no
 `HEALTHCHECK`. `scripts/check-compose.sh` checks that stack in the same CI job. The
-decisions below are unchanged; see the README, "Run the demo".
+decisions below are unchanged; see [Run the demo](../running.md).
 
 ## Context
 

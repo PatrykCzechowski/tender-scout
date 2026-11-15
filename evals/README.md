@@ -2,8 +2,8 @@
 
 `src/TenderScout.Evaluation` measures how well search finds the passage that answers a question, and how well
 `POST /ask` answers, cites and refuses. With `--agent-cases` it measures instead which tools the agent of
-`POST /agent` calls; see [Agent tool choices](#agent-tool-choices). Results are in the main
-[README](../README.md#evaluation).
+`POST /agent` calls; see [Agent tool choices](#agent-tool-choices). Results are in
+[docs/evaluation-results.md](../docs/evaluation-results.md).
 
 ## Golden set
 
@@ -132,7 +132,8 @@ Regenerate the vectors only when the embedding model changes, against a real mod
 dotnet run --project src/TenderScout.Evaluation -- --write-fixture
 ```
 
-Then run the gate, update the thresholds in `RetrievalGateTests` and the README, and commit both files.
+Then run the gate, update the thresholds in `RetrievalGateTests` and in
+[docs/evaluation-results.md](../docs/evaluation-results.md#ci-gate), and commit both files.
 
 ## Agent tool choices
 
@@ -222,7 +223,8 @@ dotnet user-secrets --project src/TenderScout.Evaluation set "Agent:Model" "Spea
 dotnet run --project src/TenderScout.Evaluation -- --agent-cases
 ```
 
-With chat through OpenRouter (see the README), the same command runs the agent on the hosted model; the embeddings
+With chat through OpenRouter (see
+[Chat through OpenRouter](../docs/agent-and-mcp.md#chat-through-openrouter)), the same command runs the agent on the hosted model; the embeddings
 stay on Ollama. The key comes from the environment, so it is not stored with the other settings:
 
 ```sh
