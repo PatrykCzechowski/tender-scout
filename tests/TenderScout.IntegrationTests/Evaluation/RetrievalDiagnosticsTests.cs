@@ -24,8 +24,10 @@ public sealed class RetrievalDiagnosticsTests(PostgresFixture database)
         var filtered = await scope.ServiceProvider.GetRequiredService<EvaluationRunner>()
             .RetrieveAsync([.. questions.Select(q => q with { PublicationNumber = "100101-2026" })], Ct);
 
-        // Without a tender every one of the 30 chunks has a vector; within 100101-2026 there are 6.
-        Assert.All(all, row => Assert.Equal((30, null), (row.VectorCandidates, row.TenderChunksWithVector)));
+        // Without a tender every one of the 30 chunks has a vector; within one tender there are 6. One question names
+        // its tender in the text, so it is limited to that tender as /ask would limit it.
+        Assert.Equal(["syn-q04"], all.Where(row => row.TenderFromQuestion).Select(row => row.Id));
+        Assert.All(all, row => Assert.Equal(row.TenderFromQuestion ? (6, 6) : (30, null), (row.VectorCandidates, row.TenderChunksWithVector)));
         Assert.All(filtered, row => Assert.Equal((6, 6), (row.VectorCandidates, row.TenderChunksWithVector)));
         Assert.All(all.Concat(filtered), row =>
         {

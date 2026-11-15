@@ -98,7 +98,7 @@ public sealed class EvaluationRunner(
 
     /// <summary>
     /// Ranks the chunks of vector, full-text and hybrid search for every question, as <c>/ask</c> would search,
-    /// within the question's tender if it names one. Questions with a stored vector are not sent to the embedding model.
+    /// within the tender <c>/ask</c> would choose. Questions with a stored vector are not sent to the embedding model.
     /// </summary>
     /// <exception cref="InvalidDataException">A quote is in no chunk of its document near its page; names the records.</exception>
     public async Task<IReadOnlyList<QuestionResult>> RetrieveAsync(IReadOnlyList<GoldenRecord> records, CancellationToken cancellationToken)
@@ -113,44 +113,62 @@ public sealed class EvaluationRunner(
                 $"No chunk of the document contains the quote on its page or the one before: {string.Join(", ", broken.Select(r => r.Id))}");
         }
 
-        var model = embeddingOptions.Value.Model;
         var results = new List<QuestionResult>();
         foreach (var record in records)
         {
-            var vector = record.Vector
-                ?? (await generator.GenerateVectorAsync(record.Question, cancellationToken: cancellationToken).ConfigureAwait(false)).ToArray();
-            var tender = record.PublicationNumber;
-            var vectorRanking = await repository.SearchAsync(vector, model, Metrics.MrrCutoff, tender, cancellationToken).ConfigureAwait(false);
-            var textRanking = await repository.TextSearchAsync(record.Question, tender, cancellationToken).ConfigureAwait(false);
-            var hybridRanking = await repository.HybridSearchAsync(record.Question, vector, model, Metrics.MrrCutoff, tender, cancellationToken)
-                .ConfigureAwait(false);
-
-            // The diagnostics read the same two candidate lists that hybrid search fused, in full.
-            var vectorCandidates = (await repository.SearchAsync(vector, model, ChunkEmbeddingRepository.MaxSearchResults, tender, cancellationToken)
-                .ConfigureAwait(false)).Select(c => c.ChunkId).ToList();
-            var tenderChunks = tender is null ? (int?)null : await CountChunksWithVectorAsync(tender, model, cancellationToken).ConfigureAwait(false);
-
             var relevantIds = relevant.GetValueOrDefault(record.Id, []).Select(c => c.Id).ToHashSet();
-            results.Add(new QuestionResult
-            {
-                Id = record.Id,
-                Answerable = record.Answerable,
-                Paraphrase = record.Paraphrase,
-                VectorRank = Metrics.FirstRelevantRank(vectorRanking.Select(c => c.ChunkId), relevantIds),
-                TextRank = Metrics.FirstRelevantRank(textRanking.Take(Metrics.MrrCutoff), relevantIds),
-                HybridRank = Metrics.FirstRelevantRank(hybridRanking.Select(c => c.ChunkId), relevantIds),
-                Similarity = vectorRanking.Count > 0 ? vectorRanking[0].Score : 0,
-                NumberMatch = QuestionAnswerer.ContainsNumberFrom(record.Question, [.. hybridRanking.Take(QuestionAnswerer.PassageCount)]),
-                VectorCandidates = vectorCandidates.Count,
-                TextCandidates = textRanking.Count,
-                SharedCandidates = vectorCandidates.Intersect(textRanking).Count(),
-                VectorCandidateRank = Metrics.FirstRelevantRank(vectorCandidates, relevantIds),
-                TextCandidateRank = Metrics.FirstRelevantRank(textRanking, relevantIds),
-                TenderChunksWithVector = tenderChunks,
-            });
+            results.Add(await RetrieveAsync(record, relevantIds, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// One question, limited to the tender <c>/ask</c> would choose: the record's publication number, else the one its
+    /// question names. A question that <c>/ask</c> ends with a clear answer is not searched and counts as a refusal.
+    /// </summary>
+    private async Task<QuestionResult> RetrieveAsync(GoldenRecord record, HashSet<long> relevantIds, CancellationToken cancellationToken)
+    {
+        var choice = await answerer.ChooseTenderAsync(record.Question, record.PublicationNumber, cancellationToken).ConfigureAwait(false);
+        var result = new QuestionResult
+        {
+            Id = record.Id,
+            Answerable = record.Answerable,
+            Paraphrase = record.Paraphrase,
+            TenderFromQuestion = choice.Source == PublicationNumberSource.Question,
+            TenderRefusal = choice.ClearAnswer?.RefusalReason,
+        };
+        if (choice.ClearAnswer is not null)
+        {
+            result.Refused = true;
+            return result;
+        }
+
+        var model = embeddingOptions.Value.Model;
+        var tender = choice.PublicationNumber;
+        var vector = record.Vector
+            ?? (await generator.GenerateVectorAsync(record.Question, cancellationToken: cancellationToken).ConfigureAwait(false)).ToArray();
+        var vectorRanking = await repository.SearchAsync(vector, model, Metrics.MrrCutoff, tender, cancellationToken).ConfigureAwait(false);
+        var textRanking = await repository.TextSearchAsync(record.Question, tender, cancellationToken).ConfigureAwait(false);
+        var hybridRanking = await repository.HybridSearchAsync(record.Question, vector, model, Metrics.MrrCutoff, tender, cancellationToken)
+            .ConfigureAwait(false);
+
+        // The diagnostics read the same two candidate lists that hybrid search fused, in full.
+        var vectorCandidates = (await repository.SearchAsync(vector, model, ChunkEmbeddingRepository.MaxSearchResults, tender, cancellationToken)
+            .ConfigureAwait(false)).Select(c => c.ChunkId).ToList();
+
+        result.VectorRank = Metrics.FirstRelevantRank(vectorRanking.Select(c => c.ChunkId), relevantIds);
+        result.TextRank = Metrics.FirstRelevantRank(textRanking.Take(Metrics.MrrCutoff), relevantIds);
+        result.HybridRank = Metrics.FirstRelevantRank(hybridRanking.Select(c => c.ChunkId), relevantIds);
+        result.Similarity = vectorRanking.Count > 0 ? vectorRanking[0].Score : 0;
+        result.NumberMatch = QuestionAnswerer.ContainsNumberFrom(record.Question, [.. hybridRanking.Take(QuestionAnswerer.PassageCount)]);
+        result.VectorCandidates = vectorCandidates.Count;
+        result.TextCandidates = textRanking.Count;
+        result.SharedCandidates = vectorCandidates.Intersect(textRanking).Count();
+        result.VectorCandidateRank = Metrics.FirstRelevantRank(vectorCandidates, relevantIds);
+        result.TextCandidateRank = Metrics.FirstRelevantRank(textRanking, relevantIds);
+        result.TenderChunksWithVector = tender is null ? null : await CountChunksWithVectorAsync(tender, model, cancellationToken).ConfigureAwait(false);
+        return result;
     }
 
     private Task<int> CountChunksWithVectorAsync(string publicationNumber, string model, CancellationToken cancellationToken) =>

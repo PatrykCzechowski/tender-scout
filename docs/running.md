@@ -110,9 +110,10 @@ and the services do not start until `docker compose down --volumes` resets it.
 
 In "Asystent", type `Jaka jest wysokość wadium?` and put `100101-2026` into the field of the tender's number. With the
 two Bielik models above the answer was `Wysokość wadium wynosi 9 000,00 zł.`, citing page 10 of the document `syn-01`:
-"11.1. Zamawiający żąda wniesienia wadium w wysokości 9 000,00 zł". Without the number the search runs over all five
-documents, and the same question with the number written in its text was once answered from another tender's page.
-The agent, `POST /agent`, finds the tender by itself:
+"11.1. Zamawiający żąda wniesienia wadium w wysokości 9 000,00 zł". The number may also be written in the question,
+`Jaka jest wysokość wadium w 100101-2026?`, with the field empty; the answer then names the tender as taken from the
+question. Without a number in either place the search runs over all five documents. The agent, `POST /agent`, finds
+the tender by itself:
 
 ```sh
 curl -X POST http://localhost:15150/agent -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \

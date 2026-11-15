@@ -163,6 +163,10 @@ public sealed partial class ChunkEmbeddingRepository(TenderScoutDbContext dbCont
             })];
     }
 
+    /// <summary>Whether the tender has at least one stored passage, so that a search limited to it can find something.</summary>
+    public Task<bool> HasPassagesAsync(string publicationNumber, CancellationToken cancellationToken = default) =>
+        Chunks(publicationNumber).AnyAsync(cancellationToken);
+
     /// <summary>
     /// The content words of a question joined with OR. Only letters and digits survive, so the user cannot write
     /// operators; <see langword="null"/> when no word is left.

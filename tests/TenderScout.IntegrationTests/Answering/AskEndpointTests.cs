@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -11,6 +12,7 @@ using Polly.Timeout;
 using TenderScout.Domain.Documents;
 using TenderScout.Infrastructure.Answering;
 using TenderScout.Infrastructure.Persistence;
+using TenderScout.IntegrationTests.Evaluation;
 using TenderScout.IntegrationTests.Security;
 using TenderScout.Tests.Shared;
 
@@ -20,7 +22,7 @@ namespace TenderScout.IntegrationTests.Answering;
 /// The API in memory against PostgreSQL, with fake embedding and chat clients. Chunk vectors are fixed, and the
 /// question's vector is passed in, so cosine similarities are known: (1, 0) against (1, 0) is 1, against (0, 1) is 0.
 /// </summary>
-public sealed class AskEndpointTests(PostgresFixture database)
+public sealed partial class AskEndpointTests(PostgresFixture database)
 {
     private const string Question = "Jaka jest wysokość wadium?";
 
@@ -100,7 +102,11 @@ public sealed class AskEndpointTests(PostgresFixture database)
 
         var answer = await ReadAnswerAsync(await AskAsync(connection, new { question = Question, publicationNumber = "999999-2026" }));
 
-        AssertRefusal(answer);
+        Assert.Equal(
+            (true, "Nie mam dokumentów ogłoszenia 999999-2026.", "999999-2026", PublicationNumberSource.Field, RefusalReason.NoDocuments),
+            (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
+        Assert.Empty(answer.Citations);
+        Assert.Empty(_generator.Calls);
         Assert.Empty(_chat.Calls);
     }
 
@@ -267,11 +273,183 @@ public sealed class AskEndpointTests(PostgresFixture database)
         Assert.Equal(expected, (await client.GetAsync("/scalar/", Ct)).StatusCode);
     }
 
+    [Fact]
+    public async Task NumberInTheQuestion_LimitsTheSearchToThatTender_AndNamesIt()
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(1, 0)));
+        const string question = "Jakie wadium w 222222-2026?";
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question }));
+
+        var prompt = Assert.Single(_chat.Calls).Messages[1].Text;
+        Assert.StartsWith($"Pytanie: {question}", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("swz-a", prompt, StringComparison.Ordinal);
+        Assert.Equal([question], Assert.Single(_generator.Calls));
+        Assert.Equal(["swz-b"], answer.Citations.Select(c => c.DocId));
+        Assert.Equal(("222222-2026", PublicationNumberSource.Question, (RefusalReason?)null), (answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
+    }
+
+    [Fact]
+    public async Task NumberInTheQuestion_GivesTheReplyOfTheSameNumberInTheField()
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(0.9f, 0.1f)));
+        const string question = "Jakie wadium w 222222-2026?";
+
+        var fromQuestion = await ReadAnswerAsync(await AskAsync(connection, new { question }));
+        var fromField = await ReadAnswerAsync(await AskAsync(connection, new { question, publicationNumber = "222222-2026" }));
+
+        Assert.Equal(_chat.Calls[0].Messages[1].Text, _chat.Calls[1].Messages[1].Text);
+        Assert.Equal((fromField.Refused, fromField.Answer, fromField.PublicationNumber, fromField.RefusalReason), (fromQuestion.Refused, fromQuestion.Answer, fromQuestion.PublicationNumber, fromQuestion.RefusalReason));
+        Assert.Equal(fromField.Citations, fromQuestion.Citations);
+        Assert.Equal((PublicationNumberSource.Question, PublicationNumberSource.Field), (fromQuestion.PublicationNumberSource, fromField.PublicationNumberSource));
+    }
+
+    [Fact]
+    public async Task NoNumber_SearchesEveryTender_AndNamesNone()
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(0.9f, 0.1f)));
+        _chat.Reply = """{"answer": "Odpowiedź.", "citations": [1, 2]}""";
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question = Question }));
+
+        Assert.Equal(["swz-a", "swz-b"], answer.Citations.Select(c => c.DocId).Order());
+        Assert.Equal((null, null), (answer.PublicationNumber, answer.PublicationNumberSource));
+    }
+
+    [Fact]
+    public async Task NamedTenderWithoutACloseEnoughPassage_IsTheOrdinaryRefusal_NamingThatTender()
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Termin wykonania zamówienia.", Vector(0, 1)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi trzydzieści tysięcy złotych.", Vector(1, 0)));
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question = "Jaka jest wysokość wadium w 111111-2026?" }));
+
+        AssertRefusal(answer);
+        Assert.Equal(("111111-2026", PublicationNumberSource.Question), (answer.PublicationNumber, answer.PublicationNumberSource));
+        Assert.Empty(_chat.Calls);
+    }
+
+    [Theory]
+    [InlineData("Jakie wadium w 222222-2026?")]
+    [InlineData("Jakie wadium w 222222-2026 i w 333333-2026?")]
+    [InlineData("Jakie wadium w 111111-2026?")]
+    public async Task NumberInTheField_Wins_WhateverTheQuestionNames(string question)
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(1, 0)));
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question, publicationNumber = "111111-2026" }));
+
+        Assert.DoesNotContain("swz-b", Assert.Single(_chat.Calls).Messages[1].Text, StringComparison.Ordinal);
+        Assert.Equal(["swz-a"], answer.Citations.Select(c => c.DocId));
+        Assert.Equal(("111111-2026", PublicationNumberSource.Field), (answer.PublicationNumber, answer.PublicationNumberSource));
+    }
+
+    [Fact]
+    public async Task InvalidField_Is400_AlsoWhenTheQuestionNamesATender()
+    {
+        var response = await AskAsync(database.ConnectionString, new { question = "Jakie wadium w 111111-2026?", publicationNumber = "111111/2026" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors").TryGetProperty("publicationNumber", out _));
+        Assert.Empty(_generator.Calls);
+    }
+
+    [Theory]
+    [InlineData("Jakie wadium w 111111-2026 i w 222222-2026?", "111111-2026, 222222-2026")]
+    [InlineData("Jakie wadium w 999999-2026, a jakie w 111111-2026?", "999999-2026, 111111-2026")]
+    [InlineData("Jakie wadium w 888888-2026 i w 999999-2026?", "888888-2026, 999999-2026")]
+    public async Task SeveralTendersInTheQuestion_IsAClearAnswer_WithoutSearchingOrAModel(string question, string numbers)
+    {
+        var connection = await SeedAsync(
+            new("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)),
+            new("222222-2026", "swz-b", 2, "Wadium wynosi 30 000 zł.", Vector(1, 0)));
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question }));
+
+        Assert.Equal(
+            (true, $"W pytaniu są różne numery ogłoszeń: {numbers}. Podaj jeden numer w polu numeru ogłoszenia.", (string?)null, (PublicationNumberSource?)null, RefusalReason.SeveralTenders),
+            (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
+        Assert.Empty(answer.Citations);
+        Assert.Empty(_generator.Calls);
+        Assert.Empty(_chat.Calls);
+    }
+
+    [Fact]
+    public async Task TenderWithoutDocumentsInTheQuestion_IsAClearAnswer_WithoutSearchingOrAModel()
+    {
+        var connection = await SeedAsync(new Passage("111111-2026", "swz-a", 1, "Wadium wynosi 15 000 zł.", Vector(1, 0)));
+
+        var answer = await ReadAnswerAsync(await AskAsync(connection, new { question = "Jakie wadium w 999999-2026?" }));
+
+        Assert.Equal(
+            (true, "Nie mam dokumentów ogłoszenia 999999-2026.", "999999-2026", PublicationNumberSource.Question, RefusalReason.NoDocuments),
+            (answer.Refused, answer.Answer, answer.PublicationNumber, answer.PublicationNumberSource, answer.RefusalReason));
+        Assert.Empty(answer.Citations);
+        Assert.Empty(_generator.Calls);
+        Assert.Empty(_chat.Calls);
+    }
+
+    [Fact]
+    public async Task DemoQuestion_WithTheNumberOnlyInTheText_GivesTheModelThePassagesOfThatTenderOnly()
+    {
+        var connection = await database.CreateIsolatedDatabaseAsync();
+        await using (var dbContext = database.CreateDbContext(connection))
+        {
+            DemoData.AddPassages(dbContext, Path.Combine(AppContext.BaseDirectory, "Evaluation", "synthetic-passages.jsonl"));
+            await dbContext.SaveChangesAsync(Ct);
+        }
+
+        // The stored vector of the synthetic question about the deposit of the same tender stands in for the model.
+        var deposit = SyntheticSetDatabase.Questions.Single(q => q.Id == "syn-q05");
+        await AskAsync(connection, new { question = "Jaka jest wysokość wadium w 100101-2026?" }, deposit.Vector);
+
+        var prompt = Assert.Single(_chat.Calls).Messages[1].Text;
+        Assert.All(DocumentLine().Matches(prompt), m => Assert.Equal("syn-01", m.Groups[1].Value));
+        Assert.Contains("dokument syn-01, strona 10", prompt, StringComparison.Ordinal);
+        Assert.Contains("9 000,00 zł", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OpenApiDocument_DescribesTheTenderFieldsOfTheReply()
+    {
+        await using var api = new WebApplicationFactory<Program>().WithWebHostBuilder(web => Configure(web, database.ConnectionString));
+        using var client = api.CreateClient();
+
+        var schemas = (await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", Ct)).GetProperty("components").GetProperty("schemas");
+
+        var reply = schemas.GetProperty(nameof(AskResponse)).GetProperty("properties");
+        Assert.True(reply.TryGetProperty("publicationNumber", out _));
+        Assert.Equal(["field", "question"], Values(schemas, reply, "publicationNumberSource"));
+        Assert.Equal(["noAnswer", "severalTenders", "noDocuments"], Values(schemas, reply, "refusalReason"));
+    }
+
+    /// <summary>The string values of a nullable enum property: <c>oneOf</c> null or a reference to the enum's schema.</summary>
+    private static string?[] Values(JsonElement schemas, JsonElement properties, string name)
+    {
+        var reference = properties.GetProperty(name).GetProperty("oneOf").EnumerateArray()
+            .Single(s => s.TryGetProperty("$ref", out _)).GetProperty("$ref").GetString()!;
+        return [.. schemas.GetProperty(reference.Split('/')[^1]).GetProperty("enum").EnumerateArray()
+            .Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString())];
+    }
+
+    [GeneratedRegex(@"\] dokument (\S+), strona")]
+    private static partial Regex DocumentLine();
+
     private static void AssertRefusal(AskResponse answer)
     {
         Assert.True(answer.Refused);
         Assert.Equal(QuestionAnswerer.RefusalMessage, answer.Answer);
         Assert.Empty(answer.Citations);
+        Assert.Equal(RefusalReason.NoAnswer, answer.RefusalReason);
     }
 
     private static float[] Vector(float first, float second)

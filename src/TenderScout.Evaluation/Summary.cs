@@ -95,7 +95,7 @@ public static class Summary
     /// <summary>
     /// What the candidate lists of hybrid search explain, by question id: how many questions have a full top 5 of shared
     /// candidates, the questions that vector search has in its top 5 and hybrid search does not, and the vector lists
-    /// that the index cut short.
+    /// that the index cut short. Then where the tenders came from and which questions were not searched.
     /// </summary>
     private static IEnumerable<string> Diagnostics(IReadOnlyList<QuestionResult> questions)
     {
@@ -106,12 +106,15 @@ public static class Summary
             .Where(q => q.VectorCandidates < ChunkEmbeddingRepository.MaxSearchResults && q.VectorCandidates < q.TenderChunksWithVector)
             .Select(q => q.Id)
             .ToList();
+        var notSearched = questions.Where(q => q.TenderRefusal is not null).Select(q => q.Id).ToList();
         return
         [
             string.Empty,
             Invariant($"Questions with at least {Metrics.RecallCutoff} candidates in both lists: {questions.Count(q => q.SharedCandidates >= Metrics.RecallCutoff)} of {questions.Count}"),
             $"In the vector top {Metrics.RecallCutoff}, not in the hybrid top {Metrics.RecallCutoff}: {(lost.Count == 0 ? "none" : string.Join(", ", lost))}",
             $"Vector lists cut short by the index: {(cutShort.Count == 0 ? "none" : string.Join(", ", cutShort))}",
+            Invariant($"Tender taken from the question text: {questions.Count(q => q.TenderFromQuestion)} of {questions.Count}"),
+            $"Not searched, several tenders or a tender without documents: {(notSearched.Count == 0 ? "none" : string.Join(", ", notSearched))}",
         ];
     }
 

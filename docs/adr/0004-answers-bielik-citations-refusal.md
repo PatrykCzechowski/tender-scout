@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-11-10, amended 2026-11-10 (answer length limit, first golden-set measurement of the threshold)
+Accepted — 2026-11-10, amended 2026-11-10 (answer length limit, first golden-set measurement of the threshold),
+amended 2026-11-15 (the tender named in the question)
 
 ## Context
 
@@ -134,6 +135,19 @@ questions that contain no number.
 The 512-token limit was added after one answer kept generating inside the JSON for
 more than 2800 tokens; a reply cut off at the limit is not valid JSON and ends as a
 refusal. In the measured run no answer reached it.
+
+### Addition, 2026-11-15: the tender named in the question
+
+With the number field empty, a question that names one tender by its publication
+number is limited to that tender, as if the number were in the field; before, it was
+searched over all documents and could be answered from another tender. The field
+always wins. A tender is known when at least one passage of its documents is stored.
+Two refusals end a question before any search or model call, with 200 like every
+refusal: several different numbers in the question (`severalTenders`) and a tender
+without documents, from the question or the field (`noDocuments`). The reply names
+the tender used, where its number came from and why a question was refused. The
+prompt, the passage count, the threshold and the digit exception do not change, and
+the question is passed on as written.
 
 ## Consequences
 
