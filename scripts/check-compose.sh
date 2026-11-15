@@ -36,8 +36,7 @@ status() {
 # expect <status> <port> <path> [curl options]
 expect() {
     local actual
-    actual=$(status "$@")
-    [ "$actual" = "$1" ] || actual=$(status "${@:2}")
+    actual=$(status "${@:2}")
     [ "$actual" = "$1" ] || fail "port $2 answered $actual to $3, expected $1"
 }
 

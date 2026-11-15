@@ -123,7 +123,9 @@ OPENROUTER_API_KEY=
 
 **TED.** The worker does not fetch notices in the demo. With `INGESTION_ENABLED=true` it fetches real notices from
 TED at start and every hour, and they mix with the invented ones. Such a database is no longer the demo: do not send
-it to a hosted model or take screenshots of it, and run `docker compose down --volumes` to get the demo back.
+it to a hosted model or take screenshots of it, and run `docker compose down --volumes` to get the demo back. Once
+real notices are stored, the next `docker compose up` stops at `demo-data`, which refuses a database with other data,
+and the services do not start until `docker compose down --volumes` resets it.
 
 ### A question to try
 
