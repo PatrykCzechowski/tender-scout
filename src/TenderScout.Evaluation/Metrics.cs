@@ -1,3 +1,5 @@
+using TenderScout.Infrastructure.Answering;
+
 namespace TenderScout.Evaluation;
 
 /// <summary>
@@ -33,6 +35,15 @@ public sealed class QuestionResult
 
     /// <summary>The judge's verdict on an answer; <see langword="null"/> when not judged or when its reply was not valid JSON.</summary>
     public bool? Faithful { get; set; }
+
+    /// <summary>The tender came from the question text, because the record has no publication number.</summary>
+    public bool TenderFromQuestion { get; init; }
+
+    /// <summary>
+    /// The clear answer <c>/ask</c> gives before any search: several tenders, or one without documents. The question
+    /// was not searched, counts as refused and has no ranks.
+    /// </summary>
+    public RefusalReason? TenderRefusal { get; init; }
 
     /// <summary>Candidates of the vector side that hybrid search fused, at most 40.</summary>
     public int VectorCandidates { get; set; }
