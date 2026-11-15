@@ -12,7 +12,7 @@ using TenderScout.Contracts.Documents;
 using TenderScout.Infrastructure.Embeddings;
 using TenderScout.Tests.Shared;
 
-namespace TenderScout.IntegrationTests.Documents;
+namespace TenderScout.UnitTests.Documents;
 
 /// <summary>
 /// The trace of one document across the queue, with the services' telemetry settings, MassTransit's in-memory transport
