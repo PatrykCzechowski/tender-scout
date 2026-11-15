@@ -568,8 +568,9 @@ paid. Requests are limited by `Chat:RequestTimeout` as before.
 the question, the instructions of the prompts with today's date, the names, descriptions and parameters of the tools,
 the model's own calls and the whole conversation of a run, the notices and passages the tools return, and for `/ask`
 the five passages it answers from. They do not receive the PDF files, vectors, database credentials or the caller's
-token. Nothing checks that the data are invented; so far only invented data have been sent, and the service must
-not be pointed at real tender documents with this setting until that is decided.
+token. Nothing in the API checks that the data are invented; so far only invented data have been sent, and the
+service must not be pointed at real tender documents with this setting until that is decided. The evaluation command
+refuses to answer its golden set with this setting; see [`evals/README.md`](evals/README.md#running).
 
 ### Evaluation
 
